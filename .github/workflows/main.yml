@@ -1,0 +1,28 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Building...
+      shell: bash
+      run: ./build.sh release
+    - name: Uploading artifact...
+      uses: actions/upload-artifact@v2
+      with:
+        name: rive_tessellation_viewer-win32.exe
+        path: build/bin/release/rive_tessellation_viewer.exe
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Building...
+      run: ./build.sh release
+    - name: Uploading artifact...
+      uses: actions/upload-artifact@v2
+      with:
+        name: rive_tessellation_viewer-osx
+        path: build/bin/release/rive_tessellation_viewer

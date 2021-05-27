@@ -1,0 +1,22 @@
+diff --git a/include/importers/import_stack.hpp b/include/importers/import_stack.hpp
+index f31a49e..4b99a82 100644
+--- a/include/importers/import_stack.hpp
++++ b/include/importers/import_stack.hpp
+@@ -5,6 +5,7 @@
+ #include <unordered_map>
+ #include <vector>
+ #include <algorithm>
++#include <stdint.h>
+ 
+ namespace rive
+ {
+diff --git a/src/animation/blend_state.cpp b/src/animation/blend_state.cpp
+index 4c94967..ab99125 100644
+--- a/src/animation/blend_state.cpp
++++ b/src/animation/blend_state.cpp
+@@ -1,4 +1,5 @@
+ #include "animation/blend_state.hpp"
++#include <algorithm>
+ 
+ using namespace rive;
+ 
