@@ -8,6 +8,19 @@
 
     Overview:
 
+        Shader program 'rive_debug_contour':
+            Get shader desc: rive_debug_contour_shader_desc(sg_query_backend());
+            Vertex shader: vs
+                Attribute slots:
+                    ATTR_vs_position = 0
+                Uniform block 'vs_params':
+                    C struct: vs_params_t
+                    Bind slot: SLOT_vs_params = 0
+            Fragment shader: debug_contour
+                Uniform block 'fs_contour':
+                    C struct: fs_contour_t
+                    Bind slot: SLOT_fs_contour = 0
+
         Shader program 'rive_shader':
             Get shader desc: rive_shader_shader_desc(sg_query_backend());
             Vertex shader: vs
@@ -24,6 +37,7 @@
 
     Shader descriptor structs:
 
+        sg_shader rive_debug_contour = sg_make_shader(rive_debug_contour_shader_desc(sg_query_backend()));
         sg_shader rive_shader = sg_make_shader(rive_shader_shader_desc(sg_query_backend()));
 
     Vertex attribute locations for vertex shader 'vs':
@@ -60,6 +74,14 @@
         };
         sg_apply_uniforms(SG_SHADERSTAGE_[VS|FS], SLOT_fs_paint, &SG_RANGE(fs_paint));
 
+    Bind slot and C-struct for uniform block 'fs_contour':
+
+        fs_contour_t fs_contour = {
+            .color = ...;
+            .solidColor = ...;
+        };
+        sg_apply_uniforms(SG_SHADERSTAGE_[VS|FS], SLOT_fs_contour, &SG_RANGE(fs_contour));
+
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -90,6 +112,13 @@ SOKOL_SHDC_ALIGN(16) typedef struct fs_paint_t {
     float stopCount;
     uint8_t _pad_536[8];
 } fs_paint_t;
+#pragma pack(pop)
+#define SLOT_fs_contour (0)
+#pragma pack(push,1)
+SOKOL_SHDC_ALIGN(16) typedef struct fs_contour_t {
+    float color[4];
+    float solidColor[4];
+} fs_contour_t;
 #pragma pack(pop)
 /*
     #version 330
@@ -320,9 +349,63 @@ static const char fs_source_glsl330[1955] = {
     0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x7d,0x0a,0x20,0x20,0x20,0x20,0x7d,0x0a,0x7d,
     0x0a,0x0a,0x00,
 };
+/*
+    #version 330
+    
+    uniform vec4 fs_contour[2];
+    layout(location = 0) out vec4 fragColor;
+    in vec2 vxPosition;
+    
+    void main()
+    {
+        fragColor = vec4(mix(fs_contour[0].xyz, fs_contour[1].xyz, vec3(fs_contour[1].w)), 1.0);
+    }
+    
+*/
+static const char debug_contour_source_glsl330[215] = {
+    0x23,0x76,0x65,0x72,0x73,0x69,0x6f,0x6e,0x20,0x33,0x33,0x30,0x0a,0x0a,0x75,0x6e,
+    0x69,0x66,0x6f,0x72,0x6d,0x20,0x76,0x65,0x63,0x34,0x20,0x66,0x73,0x5f,0x63,0x6f,
+    0x6e,0x74,0x6f,0x75,0x72,0x5b,0x32,0x5d,0x3b,0x0a,0x6c,0x61,0x79,0x6f,0x75,0x74,
+    0x28,0x6c,0x6f,0x63,0x61,0x74,0x69,0x6f,0x6e,0x20,0x3d,0x20,0x30,0x29,0x20,0x6f,
+    0x75,0x74,0x20,0x76,0x65,0x63,0x34,0x20,0x66,0x72,0x61,0x67,0x43,0x6f,0x6c,0x6f,
+    0x72,0x3b,0x0a,0x69,0x6e,0x20,0x76,0x65,0x63,0x32,0x20,0x76,0x78,0x50,0x6f,0x73,
+    0x69,0x74,0x69,0x6f,0x6e,0x3b,0x0a,0x0a,0x76,0x6f,0x69,0x64,0x20,0x6d,0x61,0x69,
+    0x6e,0x28,0x29,0x0a,0x7b,0x0a,0x20,0x20,0x20,0x20,0x66,0x72,0x61,0x67,0x43,0x6f,
+    0x6c,0x6f,0x72,0x20,0x3d,0x20,0x76,0x65,0x63,0x34,0x28,0x6d,0x69,0x78,0x28,0x66,
+    0x73,0x5f,0x63,0x6f,0x6e,0x74,0x6f,0x75,0x72,0x5b,0x30,0x5d,0x2e,0x78,0x79,0x7a,
+    0x2c,0x20,0x66,0x73,0x5f,0x63,0x6f,0x6e,0x74,0x6f,0x75,0x72,0x5b,0x31,0x5d,0x2e,
+    0x78,0x79,0x7a,0x2c,0x20,0x76,0x65,0x63,0x33,0x28,0x66,0x73,0x5f,0x63,0x6f,0x6e,
+    0x74,0x6f,0x75,0x72,0x5b,0x31,0x5d,0x2e,0x77,0x29,0x29,0x2c,0x20,0x31,0x2e,0x30,
+    0x29,0x3b,0x0a,0x7d,0x0a,0x0a,0x00,
+};
 #if !defined(SOKOL_GFX_INCLUDED)
   #error "Please include sokol_gfx.h before shader.glsl.h"
 #endif
+static inline const sg_shader_desc* rive_debug_contour_shader_desc(sg_backend backend) {
+  if (backend == SG_BACKEND_GLCORE33) {
+    static sg_shader_desc desc;
+    static bool valid;
+    if (!valid) {
+      valid = true;
+      desc.attrs[0].name = "position";
+      desc.vs.source = vs_source_glsl330;
+      desc.vs.entry = "main";
+      desc.vs.uniform_blocks[0].size = 192;
+      desc.vs.uniform_blocks[0].uniforms[0].name = "vs_params";
+      desc.vs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+      desc.vs.uniform_blocks[0].uniforms[0].array_count = 12;
+      desc.fs.source = debug_contour_source_glsl330;
+      desc.fs.entry = "main";
+      desc.fs.uniform_blocks[0].size = 32;
+      desc.fs.uniform_blocks[0].uniforms[0].name = "fs_contour";
+      desc.fs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+      desc.fs.uniform_blocks[0].uniforms[0].array_count = 2;
+      desc.label = "rive_debug_contour_shader";
+    };
+    return &desc;
+  }
+  return 0;
+}
 static inline const sg_shader_desc* rive_shader_shader_desc(sg_backend backend) {
   if (backend == SG_BACKEND_GLCORE33) {
     static sg_shader_desc desc;

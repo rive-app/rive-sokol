@@ -89,6 +89,24 @@ void main()
 }
 @end
 
-@program rive_shader vs fs
+@fs debug_contour
+in vec2  vxPosition;
+out vec4 fragColor;
+
+uniform fs_contour
+{
+    vec4 color;
+    vec4 solidColor;
+};
+
+void main()
+{
+    vec3 colorOut = mix(color.rgb, solidColor.rgb, solidColor.a);
+    fragColor = vec4(colorOut.rgb, 1.0);
+}
+@end
+
+@program rive_shader        vs fs
+@program rive_debug_contour vs debug_contour
 
 

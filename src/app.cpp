@@ -20,7 +20,7 @@
 #include "rive/shared.h"
 #include "rive/shader.glsl.h"
 
-#define VIEWER_WINDOW_NAME "Rive Tessellation Viewer"
+#define VIEWER_WINDOW_NAME "Rive Sokol Viewer"
 
 typedef ImVec2 vs_imgui_params_t;
 
@@ -29,6 +29,17 @@ static struct App
     static const int MAX_ARTBOARD_CONTEXTS = 8;
     static const int MAX_IMGUI_VERTICES    = (1<<16);
     static const int MAX_IMGUI_INDICES     = MAX_IMGUI_VERTICES * 3;
+
+    enum DebugView
+    {
+        DEBUG_VIEW_NONE    = 0,
+        DEBUG_VIEW_CONTOUR = 1,
+    };
+
+    struct DebugViewData
+    {
+        float m_ContourSolidColor[4];
+    };
 
     struct ArtboardData
     {
@@ -86,6 +97,7 @@ static struct App
     sg_pipeline                m_StencilPipelineCoverClipping;
     sg_pass_action             m_PassAction;
     sg_bindings                m_Bindings;
+    sg_pipeline                m_DebugViewContourPipeline;
     // Imgui
     sg_buffer                  m_ImguiVxBuffer;
     sg_buffer                  m_ImguiIxBuffer;
@@ -94,6 +106,8 @@ static struct App
     sg_pipeline                m_ImguiPipeline;
     // App state
     Camera                     m_Camera;
+    DebugView                  m_DebugView;
+    DebugViewData              m_DebugViewData;
 } g_app;
 
 static bool LoadFileFromPath(const char* path, uint8_t** bytesOut, size_t* bytesLengthOut)
@@ -450,17 +464,32 @@ bool AppBootstrap(int argc, char const *argv[])
     pipelineStencilDesc.stencil.write_mask          = 0x7F;
     sg_pipeline coverPipelineClipping = sg_make_pipeline(&pipelineStencilDesc);
 
-    g_app.m_MainShader           = tessellationPipeline.shader;
-    g_app.m_TessellationPipeline = sg_make_pipeline(&tessellationPipeline);
-    g_app.m_PassAction           = {0};
-    g_app.m_Bindings             = {};
-
     g_app.m_StencilPipelineNonClippingCCW   = stencilPipelineNonClippingCCW;
     g_app.m_StencilPipelineNonClippingCW    = stencilPipelineNonClippingCW;
     g_app.m_StencilPipelineClippingCCW      = stencilPipelineClippingCCW;
     g_app.m_StencilPipelineClippingCW       = stencilPipelineClippingCW;
     g_app.m_StencilPipelineCoverNonClipping = coverPipelineNonClipping;
     g_app.m_StencilPipelineCoverClipping    = coverPipelineClipping;
+
+    // Debug pipelines
+    sg_pipeline_desc debugViewContourPipelineDesc               = {};
+    debugViewContourPipelineDesc.shader                         = sg_make_shader(rive_debug_contour_shader_desc(sg_query_backend()));
+    debugViewContourPipelineDesc.index_type                     = SG_INDEXTYPE_UINT32;
+    debugViewContourPipelineDesc.layout.attrs[0]                = { .format = SG_VERTEXFORMAT_FLOAT2 };
+    debugViewContourPipelineDesc.colors[0].blend.enabled        = true;
+    debugViewContourPipelineDesc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    debugViewContourPipelineDesc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    debugViewContourPipelineDesc.primitive_type                 = SG_PRIMITIVETYPE_POINTS;
+
+    sg_pass_action passAction   = {0};
+    passAction.colors[0].action = SG_ACTION_CLEAR;
+    passAction.colors[0].value  = { 0.25f, 0.25f, 0.25f, 1.0f};
+
+    g_app.m_MainShader               = tessellationPipeline.shader;
+    g_app.m_TessellationPipeline     = sg_make_pipeline(&tessellationPipeline);
+    g_app.m_DebugViewContourPipeline = sg_make_pipeline(&debugViewContourPipelineDesc);
+    g_app.m_PassAction               = passAction;
+    g_app.m_Bindings                 = {};
 
     ////////////////////////////////////////////////////
     // Rive setup
@@ -487,7 +516,7 @@ bool AppBootstrap(int argc, char const *argv[])
     sg_buffer_desc imguiVxBufferDesc = {};
     imguiVxBufferDesc.usage          = SG_USAGE_STREAM;
     imguiVxBufferDesc.size           = App::MAX_IMGUI_VERTICES * sizeof(ImDrawVert);
-    sg_buffer_desc imguiIxBufferDesc = { };
+    sg_buffer_desc imguiIxBufferDesc = {};
     imguiIxBufferDesc.type           = SG_BUFFERTYPE_INDEXBUFFER;
     imguiIxBufferDesc.usage          = SG_USAGE_STREAM;
     imguiIxBufferDesc.size           = App::MAX_IMGUI_INDICES * sizeof(ImDrawIdx);
@@ -503,7 +532,7 @@ bool AppBootstrap(int argc, char const *argv[])
     imguiFontImageDesc.wrap_v              = SG_WRAP_CLAMP_TO_EDGE;
     imguiFontImageDesc.data.subimage[0][0] = sg_range{fontPixels, size_t(fontWidth * fontHeight * 4)};
 
-    sg_shader_desc imguiShaderDesc   = { };
+    sg_shader_desc imguiShaderDesc   = {};
     sg_shader_uniform_block_desc& ub = imguiShaderDesc.vs.uniform_blocks[0];
     ub.size                          = sizeof(vs_imgui_params_t);
     ub.uniforms[0].name              = "disp_size";
@@ -695,6 +724,22 @@ static inline void GetCameraMatrix(mat4x4 M, uint32_t width, uint32_t height)
     mat4x4_mul(M, projection, view);
 }
 
+static void DebugViewContour(App::GpuBuffer* vxBuffer, App::GpuBuffer* ixBuffer, int numElements, vs_params_t& vsParams, fs_contour_t& fsParams)
+{
+    memcpy(fsParams.solidColor, g_app.m_DebugViewData.m_ContourSolidColor, sizeof(g_app.m_DebugViewData.m_ContourSolidColor));
+    sg_pipeline& pipeline      = g_app.m_DebugViewContourPipeline;
+    sg_bindings& bindings      = g_app.m_Bindings;
+    bindings.vertex_buffers[0] = vxBuffer->m_Handle;
+    bindings.index_buffer      = ixBuffer->m_Handle;
+    sg_range vsUniformsRange   = SG_RANGE(vsParams);
+    sg_range fsUniformsRange   = SG_RANGE(fsParams);
+    sg_apply_pipeline(pipeline);
+    sg_apply_bindings(&bindings);
+    sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vsUniformsRange);
+    sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &fsUniformsRange);
+    sg_draw(0, numElements, 1);
+}
+
 static void StencilToCoverRenderFn(uint32_t width, uint32_t height)
 {
     rive::StencilToCoverRenderer* renderer = (rive::StencilToCoverRenderer*) g_app.m_Renderer;
@@ -721,6 +766,26 @@ static void StencilToCoverRenderFn(uint32_t width, uint32_t height)
         rive::Mat2D transformLocal  = dc.m_TransformLocal;
 
         rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) path)->getDrawBuffers();
+
+        if (g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR)
+        {
+            if (dc.m_Tag == rive::TAG_STENCIL)
+            {
+                const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
+                fs_contour_t fsContourParams = {};
+                memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
+                Mat2DToMat4(transformWorld, (float (*)[4]) vsUniforms.transform);
+                App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
+                App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
+                DebugViewContour(
+                    contourVertexBuffer,
+                    contourIndexBuffer,
+                    contourIndexBuffer->m_DataSize / sizeof(int),
+                    vsUniforms,
+                    fsContourParams);
+            }
+            continue;
+        }
 
         // fixme: clipping
         bool isClipping = false;
@@ -867,8 +932,12 @@ void AppRenderRive(uint32_t width, uint32_t height)
     }
 }
 
-void AppConfigure(rive::RenderMode renderMode, float contourQuality)
+void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* backgroundColor)
 {
+    g_app.m_PassAction.colors[0].value.r = backgroundColor[0];
+    g_app.m_PassAction.colors[0].value.g = backgroundColor[1];
+    g_app.m_PassAction.colors[0].value.b = backgroundColor[2];
+
     if (rive::getRenderMode() != renderMode)
     {
         rive::setRenderMode(renderMode);
@@ -900,8 +969,9 @@ void AppRun()
     uint64_t timeUpdateRive;
     uint64_t timeRenderRive;
 
-    float mouseLastX = 0.0f;
-    float mouseLastY = 0.0f;
+    float mouseLastX         = 0.0f;
+    float mouseLastY         = 0.0f;
+    float backgroundColor[3] = { 0.25f, 0.25f, 0.25f };
 
     while (!glfwWindowShouldClose(g_app.m_Window))
     {
@@ -914,10 +984,26 @@ void AppRun()
 
         ImGui::NewFrame();
         ImGui::SetNextWindowPos(ImVec2(0,0));
-        ImGui::Begin("Configuration");
-        ImGui::SliderFloat("Quality", &contourQuality, 0.0f, 1.0f);
+        ImGui::Begin("Viewer Configuration");
+        ImGui::ColorEdit3("Background Color", backgroundColor);
+        ImGui::SliderFloat("Path Quality", &contourQuality, 0.0f, 1.0f);
+
+        ImGui::Text("Render Mode");
         ImGui::RadioButton("Tessellation", &renderModeChoice, (int) rive::MODE_TESSELLATION);
         ImGui::RadioButton("StencilToCover", &renderModeChoice, (int) rive::MODE_STENCIL_TO_COVER);
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("Debug View");
+        ImGui::RadioButton("None", (int*)&g_app.m_DebugView, (int) App::DEBUG_VIEW_NONE);
+        ImGui::RadioButton("Contour", (int*)&g_app.m_DebugView, (int) App::DEBUG_VIEW_CONTOUR);
+
+        if (g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR)
+        {
+            ImGui::ColorEdit4("Solid Color", g_app.m_DebugViewData.m_ContourSolidColor);
+        }
 
         ImGui::Spacing();
         ImGui::Separator();
@@ -962,7 +1048,7 @@ void AppRun()
         mouseLastX = io.MousePos.x;
         mouseLastY = io.MousePos.y;
 
-        AppConfigure((rive::RenderMode) renderModeChoice, contourQuality);
+        AppConfigure((rive::RenderMode) renderModeChoice, contourQuality, backgroundColor);
 
         timeUpdateRive = stm_now();
         AppUpdateRive(dt, window_width, window_height);
