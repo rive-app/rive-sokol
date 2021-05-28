@@ -771,18 +771,22 @@ static void StencilToCoverRenderFn(uint32_t width, uint32_t height)
         {
             if (dc.m_Tag == rive::TAG_STENCIL)
             {
-                const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
-                fs_contour_t fsContourParams = {};
-                memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
-                Mat2DToMat4(transformWorld, (float (*)[4]) vsUniforms.transform);
                 App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
                 App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
-                DebugViewContour(
-                    contourVertexBuffer,
-                    contourIndexBuffer,
-                    contourIndexBuffer->m_DataSize / sizeof(int),
-                    vsUniforms,
-                    fsContourParams);
+                if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
+                {
+                    const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
+                    fs_contour_t fsContourParams = {};
+                    memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
+                    Mat2DToMat4(transformWorld, (float (*)[4]) vsUniforms.transform);
+
+                    DebugViewContour(
+                        contourVertexBuffer,
+                        contourIndexBuffer,
+                        contourIndexBuffer->m_DataSize / sizeof(int),
+                        vsUniforms,
+                        fsContourParams);
+                }
             }
             continue;
         }
@@ -899,9 +903,25 @@ static void TessellationRenderFn(uint32_t width, uint32_t height)
             continue;
         }
 
+        Mat2DToMat4(transform, (float (*)[4]) vsUniforms.transform);
+        int drawLength = (indexBuffer->m_DataSize / sizeof(int)) * 3;
+
+        if (g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR)
+        {
+            const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
+            fs_contour_t fsContourParams                = {};
+            memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
+            DebugViewContour(
+                vertexBuffer,
+                indexBuffer,
+                drawLength,
+                vsUniforms,
+                fsContourParams);
+            continue;
+        }
+
         bindings.vertex_buffers[0] = vertexBuffer->m_Handle;
         bindings.index_buffer      = indexBuffer->m_Handle;
-        Mat2DToMat4(transform, (float (*)[4]) vsUniforms.transform);
 
         sg_apply_bindings(&bindings);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vsUniformsRange);
@@ -913,7 +933,7 @@ static void TessellationRenderFn(uint32_t width, uint32_t height)
             sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &fsUniformsRange);
         }
 
-        sg_draw(0, (indexBuffer->m_DataSize / sizeof(int)) * 3, 1);
+        sg_draw(0, drawLength, 1);
     }
 }
 #undef IS_BUFFER_VALID
