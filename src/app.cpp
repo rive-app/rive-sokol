@@ -346,6 +346,14 @@ static void AppMouseWheelCallback(GLFWwindow* w, double x, double y)
     ImGui::GetIO().MouseWheel = float(y);
 }
 
+static void AppDropCallback(GLFWwindow* window, int count, const char** paths)
+{
+    for (int i = 0; i < count; ++i)
+    {
+        AddArtboardFromPath(paths[i]);
+    }
+}
+
 bool AppBootstrap(int argc, char const *argv[])
 {
     ////////////////////////////////////////////////////
@@ -371,6 +379,7 @@ bool AppBootstrap(int argc, char const *argv[])
     glfwSetCursorPosCallback(window, AppCursorCallback);
     glfwSetMouseButtonCallback(window, AppMouseButtonCallback);
     glfwSetScrollCallback(window, AppMouseWheelCallback);
+    glfwSetDropCallback(window, AppDropCallback);
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
