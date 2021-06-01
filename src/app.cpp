@@ -414,14 +414,6 @@ bool AppBootstrap(int argc, char const *argv[])
     tessellationApplyingClippingPipeline.layout.attrs[0]      = { .format = SG_VERTEXFORMAT_FLOAT2 };
     tessellationApplyingClippingPipeline.colors[0].write_mask = SG_COLORMASK_NONE;
 
-    /*
-    gl.colorMask(false, false, false, false);
-    gl.clear(gl.STENCIL_BUFFER_BIT);
-    gl.stencilMask(0xFF);
-    gl.stencilFunc(gl.ALWAYS, 0x0, 0xFF);
-    gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR);
-    */
-
     tessellationApplyingClippingPipeline.stencil = {
         .enabled = true,
         .front = {
@@ -919,26 +911,10 @@ struct AppTessellationRenderer
         }
 
         return *p;
-
-        /*
-        glStencilFuncSeparate(gl_face,
-                        _sg_gl_compare_func(state_sfs->compare),
-                        state_ss->ref,
-                        state_ss->read_mask);
-
-        gl.stencilFunc(gl.EQUAL, this.appliedClips.length - (_clipArtboard ? 0 : 1), 0xFF);
-        gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
-        gl.colorMask(true, true, true, true);
-        */
     }
 
     void DrawPass(const rive::PathDrawEvent& evt)
     {
-        /*
-        if (m_IsApplyingClipping)
-            return;
-        */
-
         rive::RenderPath* path   = evt.m_Path;
         rive::Mat2D transform    = evt.m_TransformWorld;
         rive::TessellationRenderPath::Buffers buffers = ((rive::TessellationRenderPath*) path)->getDrawBuffers();
