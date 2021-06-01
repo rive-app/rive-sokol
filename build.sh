@@ -1,6 +1,7 @@
 #!/bin/sh
 
-OPTION=$1
+OPTION1=$1
+OPTION2=$1
 export TOOLS_DIR=build/tools
 export PLATFORM_OSX="macos"
 export PLATFORM_WINDOWS="win32"
@@ -68,20 +69,24 @@ build_assets()
     $SHDC_CMD --input assets/shader.glsl --output src/rive/shader.glsl.h --slang glsl330
 }
 
-if [ "$OPTION" = "clean" ]; then
-    echo "Cleaning project"
-    ./build-dependencies.sh $OPTION
-    make clean
-elif [ "$OPTION" = "release" ]; then
+if [ "$OPTION1" = "clean" ]; then
+    if [ "$OPTION2" = "deps" ]; then
+        echo "Cleaning dependencies"
+        ./build-dependencies.sh $OPTION1
+    else
+        echo "Cleaning project"
+        make clean
+    fi
+elif [ "$OPTION1" = "release" ]; then
     tools_setup
     platform_setup
-    ./build-dependencies.sh $OPTION
+    ./build-dependencies.sh $OPTION1
     build_assets
     make config=release -j7
 else
     tools_setup
     platform_setup
-    ./build-dependencies.sh $OPTION
+    ./build-dependencies.sh $OPTION1
     build_assets
     make -j7
 fi

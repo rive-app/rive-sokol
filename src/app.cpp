@@ -97,6 +97,7 @@ static struct App
     sg_pipeline                m_StencilPipelineClippingCW;
     sg_pipeline                m_StencilPipelineCoverNonClipping;
     sg_pipeline                m_StencilPipelineCoverClipping;
+    sg_pipeline                m_StencilPipelineCoverIsApplyingCLipping;
     sg_pass_action             m_PassAction;
     sg_bindings                m_Bindings;
     sg_pipeline                m_DebugViewContourPipeline;
@@ -500,12 +501,44 @@ bool AppBootstrap(int argc, char const *argv[])
     pipelineStencilDesc.stencil.write_mask          = 0x7F;
     sg_pipeline coverPipelineClipping = sg_make_pipeline(&pipelineStencilDesc);
 
-    g_app.m_StencilPipelineNonClippingCCW   = stencilPipelineNonClippingCCW;
-    g_app.m_StencilPipelineNonClippingCW    = stencilPipelineNonClippingCW;
-    g_app.m_StencilPipelineClippingCCW      = stencilPipelineClippingCCW;
-    g_app.m_StencilPipelineClippingCW       = stencilPipelineClippingCW;
-    g_app.m_StencilPipelineCoverNonClipping = coverPipelineNonClipping;
-    g_app.m_StencilPipelineCoverClipping    = coverPipelineClipping;
+
+    pipelineStencilDesc.stencil.front.compare       = SG_COMPAREFUNC_NOT_EQUAL;
+    pipelineStencilDesc.stencil.front.fail_op       = SG_STENCILOP_ZERO;
+    pipelineStencilDesc.stencil.front.depth_fail_op = SG_STENCILOP_ZERO;
+    pipelineStencilDesc.stencil.front.pass_op       = SG_STENCILOP_REPLACE;
+    pipelineStencilDesc.stencil.back.compare        = SG_COMPAREFUNC_NOT_EQUAL;
+    pipelineStencilDesc.stencil.back.fail_op        = SG_STENCILOP_ZERO;
+    pipelineStencilDesc.stencil.back.depth_fail_op  = SG_STENCILOP_ZERO;
+    pipelineStencilDesc.stencil.back.pass_op        = SG_STENCILOP_REPLACE;
+    pipelineStencilDesc.stencil.ref                 = 0x80;
+    pipelineStencilDesc.stencil.write_mask          = 0xFF;
+    pipelineStencilDesc.stencil.read_mask           = 0x7F;
+    pipelineStencilDesc.colors[0].write_mask        = SG_COLORMASK_NONE;
+    sg_pipeline coverPipelineIsApplyingClipping     = sg_make_pipeline(&pipelineStencilDesc);
+
+    /*
+    glStencilMask(state_ss->write_mask);
+    glStencilFuncSeparate(gl_face,
+                        _sg_gl_compare_func(state_sfs->compare),
+                        state_ss->ref,
+                        state_ss->read_mask);
+    glStencilOpSeparate(gl_face,
+                        _sg_gl_stencil_op(state_sfs->fail_op),
+                        _sg_gl_stencil_op(state_sfs->depth_fail_op),
+                        _sg_gl_stencil_op(state_sfs->pass_op));
+
+    gl.stencilMask(0xFF);
+    gl.stencilFunc(gl.NOTEQUAL, 0x80, 0x7F);
+    gl.stencilOp(gl.ZERO, gl.ZERO, gl.REPLACE);
+    */
+
+    g_app.m_StencilPipelineNonClippingCCW          = stencilPipelineNonClippingCCW;
+    g_app.m_StencilPipelineNonClippingCW           = stencilPipelineNonClippingCW;
+    g_app.m_StencilPipelineClippingCCW             = stencilPipelineClippingCCW;
+    g_app.m_StencilPipelineClippingCW              = stencilPipelineClippingCW;
+    g_app.m_StencilPipelineCoverNonClipping        = coverPipelineNonClipping;
+    g_app.m_StencilPipelineCoverClipping           = coverPipelineClipping;
+    g_app.m_StencilPipelineCoverIsApplyingCLipping = coverPipelineIsApplyingClipping;
 
     // Debug pipelines
     sg_pipeline_desc debugViewContourPipelineDesc               = {};
@@ -532,7 +565,7 @@ bool AppBootstrap(int argc, char const *argv[])
     // Rive setup
     ////////////////////////////////////////////////////
     rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
-    rive::setRenderMode(rive::MODE_TESSELLATION);
+    // rive::setRenderMode(rive::MODE_TESSELLATION);
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
     g_app.m_Renderer = rive::makeRenderer();
 
@@ -785,12 +818,12 @@ struct AppTessellationRenderer
     sg_range           m_VsUniformsRange;
     sg_range           m_FsUniformsRange;
     rive::RenderPaint* m_Paint;
-    uint32_t           m_Width  : 16;
-    uint32_t           m_Height : 16;
-    uint8_t            m_AppliedClipCount;
-    uint8_t            m_PaintDirty         : 1;
-    uint8_t            m_IsApplyingClipping : 1;
-    uint8_t            m_IsClipping         : 1;
+    uint32_t           m_Width              : 16;
+    uint32_t           m_Height             : 16;
+    uint32_t           m_AppliedClipCount   : 8;
+    uint32_t           m_PaintDirty         : 1;
+    uint32_t           m_IsApplyingClipping : 1;
+    uint32_t           m_IsClipping         : 1;
 
     static void Frame(uint32_t width, uint32_t height)
     {
@@ -991,7 +1024,10 @@ struct AppSTCRenderer
     sg_range           m_VsUniformsRange;
     sg_range           m_FsUniformsRange;
     rive::RenderPaint* m_Paint;
-    bool               m_PaintDirty;
+    uint32_t           m_Width              : 16;
+    uint32_t           m_Height             : 16;
+    uint8_t            m_PaintDirty         : 1;
+    uint8_t            m_IsApplyingClipping : 1;
 
     static void Frame(uint32_t width, uint32_t height)
     {
@@ -1005,15 +1041,21 @@ struct AppSTCRenderer
             {
                 case rive::EVENT_SET_PAINT:
                     obj.SetPaint(evt);
-                break;
+                    break;
                 case rive::EVENT_DRAW_STENCIL:
                     if (g_app.m_DebugView != App::DEBUG_VIEW_NONE)
                          obj.HandleDebugViews(evt);
                     else obj.StencilPass(evt);
-                break;
+                    break;
                 case rive::EVENT_DRAW_COVER:
                     obj.CoverPass(evt);
-                break;
+                    break;
+                case rive::EVENT_CLIPPING_BEGIN:
+                    obj.BeginClipping(evt);
+                    break;
+                case rive::EVENT_CLIPPING_END:
+                    obj.EndClipping(evt);
+                    break;
                 default:break;
             }
         }
@@ -1027,6 +1069,8 @@ struct AppSTCRenderer
         m_PaintDirty      = false;
         m_VsUniformsRange = SG_RANGE(m_VsUniforms);
         m_FsUniformsRange = SG_RANGE(m_FsUniforms);
+        m_Width           = width;
+        m_Height          = height;
 
         mat4x4 mtxCam;
         GetCameraMatrix(mtxCam, width, height);
@@ -1043,6 +1087,37 @@ struct AppSTCRenderer
             m_Paint      = evt.m_Paint;
             m_PaintDirty = true;
         }
+    }
+
+    void BeginClipping(const rive::PathDrawEvent& evt)
+    {
+        m_IsApplyingClipping  = true;
+        sg_pass_action action = {};
+        action.colors[0]      = { .action = SG_ACTION_DONTCARE };
+        action.depth          = { .action = SG_ACTION_DONTCARE };
+        action.stencil        = { .action = SG_ACTION_CLEAR, .value = 0xFF };
+
+        /*
+        gl.enable(gl.STENCIL_TEST);
+        gl.stencilMask(0xFF);
+        gl.clear(gl.STENCIL_BUFFER_BIT);
+        gl.colorMask(false, false, false, false);
+        */
+
+        sg_end_pass();
+        sg_begin_default_pass(&action, m_Width, m_Height);
+    }
+
+    void EndClipping(const rive::PathDrawEvent& evt)
+    {
+        m_IsApplyingClipping  = false;
+        sg_pass_action action = {};
+        action.colors[0]      = { .action = SG_ACTION_DONTCARE };
+        action.depth          = { .action = SG_ACTION_DONTCARE };
+        action.stencil        = { .action = SG_ACTION_DONTCARE };
+
+        sg_end_pass();
+        sg_begin_default_pass(&action, m_Width, m_Height);
     }
 
     void StencilPass(const rive::PathDrawEvent& evt)
@@ -1115,11 +1190,28 @@ struct AppSTCRenderer
         Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
         Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
 
-        sg_pipeline pipeline = evt.m_IsClipping ? g_app.m_StencilPipelineCoverClipping : g_app.m_StencilPipelineCoverNonClipping;
+        sg_pipeline pipeline = {};
+
+        if (m_IsApplyingClipping)
+        {
+            pipeline = g_app.m_StencilPipelineCoverIsApplyingCLipping;
+        }
+        else
+        {
+            if (evt.m_IsClipping)
+            {
+                pipeline = g_app.m_StencilPipelineCoverClipping;
+            }
+            else
+            {
+                pipeline = g_app.m_StencilPipelineCoverNonClipping;
+            }
+        }
+
         sg_apply_pipeline(pipeline);
         sg_apply_bindings(&bindings);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
-        if (m_PaintDirty)
+        if (!m_IsApplyingClipping && m_PaintDirty)
         {
             FillPaintData(m_Paint, m_FsUniforms);
             sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);

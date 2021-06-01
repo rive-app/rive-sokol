@@ -7,6 +7,28 @@
 
 namespace rive
 {
+    StencilToCoverRenderer::StencilToCoverRenderer()
+    {
+        m_FullscreenPath = new StencilToCoverRenderPath;
+
+        m_FullscreenPath->m_Limits = {
+            .m_MinX = -1.0f,
+            .m_MinY = -1.0f,
+            .m_MaxX =  1.0f,
+            .m_MaxY =  1.0f,
+        };
+
+        m_FullscreenPath->updateBuffers();
+    }
+
+    StencilToCoverRenderer::~StencilToCoverRenderer()
+    {
+        if (m_FullscreenPath)
+        {
+            delete m_FullscreenPath;
+        }
+    }
+
     void StencilToCoverRenderer::applyClipping()
     {
         m_IsClippingDirty = false;
@@ -37,6 +59,8 @@ namespace rive
 
         m_IsClipping = false;
 
+        pushDrawEvent({ .m_Type = EVENT_CLIPPING_BEGIN });
+
         if (m_ClipPaths.Size() > 0)
         {
             for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
@@ -53,10 +77,30 @@ namespace rive
                 m_AppliedClips.Push(m_ClipPaths[i]);
             }
         }
+
+        pushDrawEvent({ .m_Type = EVENT_CLIPPING_END });
     }
 
     void StencilToCoverRenderer::applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform)
     {
+        bool isEvenOdd = path->getFillRule() == FillRule::evenOdd;
+        path->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
+
+        if (m_IsClipping)
+        {
+            Mat2D identityTransform;
+            pushDrawEvent({
+                .m_Type           = EVENT_DRAW_COVER,
+                .m_Path           = m_FullscreenPath,
+                .m_TransformWorld = identityTransform,
+                .m_TransformLocal = identityTransform,
+                .m_IsClipping     = m_IsClipping,
+            });
+        }
+        else
+        {
+            path->cover(this, m_Transform, Mat2D(), m_IsClipping);
+        }
 
         m_IsClipping = true;
     }
@@ -78,8 +122,8 @@ namespace rive
 
         setPaint(rp);
         bool isEvenOdd = p->getFillRule() == FillRule::evenOdd;
-        p->stencil(this, m_Transform, 0, isEvenOdd);
-        p->cover(this, m_Transform, Mat2D());
+        p->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
+        p->cover(this, m_Transform, Mat2D(), m_IsClipping);
     }
 
     /* StencilToCoverRenderPath impl */
@@ -248,7 +292,7 @@ namespace rive
         m_RenderData.m_CoverIndexBuffer    = requestBuffer(m_RenderData.m_CoverIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) coverIndexData, sizeof(coverIndexData));
     }
 
-    void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd)
+    void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping)
     {
         if (m_Paths.Size() > 0)
         {
@@ -259,7 +303,7 @@ namespace rive
                 {
                     Mat2D stcPathTransform;
                     Mat2D::multiply(stcPathTransform, transform, m_Paths[i].m_Transform);
-                    stcPath->stencil(renderer, stcPathTransform, idx++, isEvenOdd);
+                    stcPath->stencil(renderer, stcPathTransform, idx++, isEvenOdd, isClipping);
                 }
             }
             return;
@@ -281,10 +325,11 @@ namespace rive
             .m_TransformWorld = transform,
             .m_Idx            = idx,
             .m_IsEvenOdd      = isEvenOdd,
+            .m_IsClipping     = isClipping,
         });
     }
 
-    void StencilToCoverRenderPath::cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal)
+    void StencilToCoverRenderPath::cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping)
     {
         if (m_Paths.Size() > 0)
         {
@@ -295,7 +340,7 @@ namespace rive
                 {
                     Mat2D stcWorldTransform;
                     Mat2D::multiply(stcWorldTransform, transform, m_Paths[i].m_Transform);
-                    stcPath->cover(renderer, stcWorldTransform, m_Paths[i].m_Transform);
+                    stcPath->cover(renderer, stcWorldTransform, m_Paths[i].m_Transform, isClipping);
                 }
             }
             return;
@@ -316,6 +361,7 @@ namespace rive
             .m_Path           = this,
             .m_TransformWorld = transform,
             .m_TransformLocal = transformLocal,
+            .m_IsClipping     = isClipping,
         });
     }
 }

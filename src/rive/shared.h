@@ -210,8 +210,11 @@ namespace rive
     class StencilToCoverRenderer : public SharedRenderer
     {
     public:
+        StencilToCoverRenderer();
+        ~StencilToCoverRenderer();
         void drawPath(RenderPath* path, RenderPaint* paint) override;
     private:
+        StencilToCoverRenderPath* m_FullscreenPath;
         void applyClipping();
         void applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform);
     };
@@ -229,11 +232,7 @@ namespace rive
 
         StencilToCoverRenderPath();
         ~StencilToCoverRenderPath();
-        void drawMesh(const Mat2D& transform);
-        void stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd);
-        void cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal);
         inline const Buffers getDrawBuffers() { return m_RenderData; }
-
     private:
         // TODO: use a global buffer or something else
         static const uint32_t COUNTOUR_BUFFER_ELEMENT_COUNT = 128 * 3;
@@ -243,8 +242,12 @@ namespace rive
         float             m_ContourError;
         PathLimits        m_Limits;
 
+        void drawMesh(const Mat2D& transform);
+        void stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping);
+        void cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping);
         void computeContour();
         void updateBuffers();
+        friend class StencilToCoverRenderer;
     };
 
     ////////////////////////////////////////////////////
