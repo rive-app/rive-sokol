@@ -35,8 +35,6 @@ namespace rive
             return;
         }
 
-        pushDrawEvent({.m_Type = EVENT_CLEAR_STENCIL});
-
         m_IsClipping = false;
 
         if (m_ClipPaths.Size() > 0)
@@ -278,11 +276,11 @@ namespace rive
         }
 
         renderer->pushDrawEvent({
-            .m_Type           = EVENT_PASS_STENCIL,
+            .m_Type           = EVENT_DRAW_STENCIL,
             .m_Path           = this,
             .m_TransformWorld = transform,
-            .m_IsEvenOdd      = isEvenOdd,
             .m_Idx            = idx,
+            .m_IsEvenOdd      = isEvenOdd,
         });
     }
 
@@ -314,7 +312,7 @@ namespace rive
         }
 
         renderer->pushDrawEvent({
-            .m_Type           = EVENT_PASS_COVER,
+            .m_Type           = EVENT_DRAW_COVER,
             .m_Path           = this,
             .m_TransformWorld = transform,
             .m_TransformLocal = transformLocal,

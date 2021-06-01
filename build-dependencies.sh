@@ -62,7 +62,7 @@ dep_rive()
         pushd . &>/dev/null
         cd rive-cpp
         git checkout .
-        git apply ../../../third-party/rive-cpp.patch
+        git apply --ignore-space-change ../../../third-party/rive-cpp.patch
 
         cd build
         premake5 gmake2
