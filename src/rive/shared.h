@@ -65,15 +65,29 @@ namespace rive
         float    m_MaxY;
     };
 
-    struct PathDrawCall
+    enum PathDrawEventType
     {
-        RenderPath*  m_Path;
-        RenderPaint* m_Paint;
-        Mat2D        m_TransformWorld;
-        Mat2D        m_TransformLocal;
-        bool         m_IsEvenOdd;
-        unsigned int m_Idx : 24;
-        unsigned int m_Tag : 8;
+        EVENT_NONE             = 0,
+        EVENT_DRAW             = 1,
+        EVENT_DRAW_STENCIL     = 2,
+        EVENT_DRAW_COVER       = 3,
+        EVENT_SET_PAINT        = 4,
+        EVENT_CLIPPING_BEGIN   = 5,
+        EVENT_CLIPPING_END     = 6,
+        EVENT_CLIPPING_DISABLE = 7,
+    };
+
+    struct PathDrawEvent
+    {
+        PathDrawEventType m_Type;
+        RenderPath*       m_Path;
+        RenderPaint*      m_Paint;
+        Mat2D             m_TransformWorld;
+        Mat2D             m_TransformLocal;
+        uint32_t          m_Idx              : 22;
+        uint32_t          m_AppliedClipCount : 8;
+        uint32_t          m_IsEvenOdd        : 1;
+        uint32_t          m_IsClipping       : 1;
     };
 
     struct GradientStop
@@ -156,15 +170,17 @@ namespace rive
     class SharedRenderer : public Renderer
     {
     public:
+        SharedRenderer();
         void save()                            override;
         void restore()                         override;
         void transform(const Mat2D& transform) override;
         void clipPath(RenderPath* path)        override;
         void startFrame();
 
-        void                      pushDrawCall(const PathDrawCall& dc);
-        inline uint32_t           getDrawCallCount()          { return m_DrawCalls.Size(); }
-        inline const PathDrawCall getDrawCall(uint32_t index) { return m_DrawCalls[index]; }
+        void                       pushDrawEvent(const PathDrawEvent& evt);
+        inline uint32_t            getDrawEventCount()            { return m_DrawEvents.Size(); }
+        inline const PathDrawEvent getDrawEvent(uint32_t index)   { return m_DrawEvents[index]; }
+        inline void                setClippingSupport(bool state) { m_IsClippingSupported = state; };
     protected:
         static const int STACK_ENTRY_MAX_CLIP_PATHS = 16;
         struct StackEntry
@@ -177,19 +193,27 @@ namespace rive
         jc::Array<StackEntry>     m_ClipPathStack;
         jc::Array<PathDescriptor> m_ClipPaths;
         jc::Array<PathDescriptor> m_AppliedClips;
-        jc::Array<PathDrawCall>   m_DrawCalls;
+        jc::Array<PathDrawEvent>  m_DrawEvents;
         Mat2D                     m_Transform;
+        SharedRenderPaint*        m_RenderPaint;
+        uint8_t                   m_IsClippingSupported : 1;
+        uint8_t                   m_IsClippingDirty     : 1;
+        uint8_t                   m_IsClipping          : 1;
+
+        void setPaint(SharedRenderPaint* rp);
     };
 
     ////////////////////////////////////////////////////
     // Stencil To Cover
     ////////////////////////////////////////////////////
+    class StencilToCoverRenderPath;
     class StencilToCoverRenderer : public SharedRenderer
     {
-    private:
-        void applyClipping();
     public:
         void drawPath(RenderPath* path, RenderPaint* paint) override;
+    private:
+        void applyClipping();
+        void applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform);
     };
 
     class StencilToCoverRenderPath : public SharedRenderPath
@@ -206,8 +230,8 @@ namespace rive
         StencilToCoverRenderPath();
         ~StencilToCoverRenderPath();
         void drawMesh(const Mat2D& transform);
-        void stencil(SharedRenderer* renderer, SharedRenderPaint* renderPaint, const Mat2D& transform, unsigned int idx, bool isEvenOdd);
-        void cover(SharedRenderer* renderer, SharedRenderPaint* paint, const Mat2D transform, const Mat2D transformLocal);
+        void stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd);
+        void cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal);
         inline const Buffers getDrawBuffers() { return m_RenderData; }
 
     private:

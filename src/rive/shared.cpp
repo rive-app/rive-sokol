@@ -346,6 +346,10 @@ namespace rive
     }
 
     /* Shared Renderer */
+    SharedRenderer::SharedRenderer()
+    : m_IsClippingSupported(true)
+    {}
+
     void SharedRenderer::clipPath(RenderPath* path)
     {
         if (m_ClipPaths.Full())
@@ -354,12 +358,15 @@ namespace rive
         }
 
         m_ClipPaths.Push({.m_Path = path, .m_Transform = m_Transform});
+        m_IsClippingDirty = true;
     }
 
     void SharedRenderer::startFrame()
     {
         m_AppliedClips.SetSize(0);
-        m_DrawCalls.SetSize(0);
+        m_DrawEvents.SetSize(0);
+        m_IsClippingDirty = false;
+        m_RenderPaint = 0;
     }
 
     void SharedRenderer::transform(const Mat2D& transform)
@@ -391,6 +398,7 @@ namespace rive
         m_Transform = last.m_Transform;
         m_ClipPaths.SetSize(0);
         m_ClipPaths.SetCapacity(last.m_ClipPathsCount);
+        m_IsClippingDirty = true;
 
         for (int i = 0; i < last.m_ClipPathsCount; ++i)
         {
@@ -398,13 +406,25 @@ namespace rive
         }
     }
 
-    void SharedRenderer::pushDrawCall(const PathDrawCall& dc)
+    void SharedRenderer::pushDrawEvent(const PathDrawEvent& event)
     {
-        if (m_DrawCalls.Full())
+        if (m_DrawEvents.Full())
         {
-            m_DrawCalls.SetCapacity(m_DrawCalls.Capacity() + 1);
+            m_DrawEvents.SetCapacity(m_DrawEvents.Capacity() + 1);
         }
-        m_DrawCalls.Push(dc);
+        m_DrawEvents.Push(event);
+    }
+
+    void SharedRenderer::setPaint(SharedRenderPaint* rp)
+    {
+        if (m_RenderPaint != rp)
+        {
+            m_RenderPaint = rp;
+            pushDrawEvent({
+                .m_Type  = EVENT_SET_PAINT,
+                .m_Paint = rp,
+            });
+        }
     }
 
     /* Misc functions */
@@ -480,6 +500,7 @@ namespace rive
         File* file          = 0;
         BinaryReader reader = BinaryReader(data, dataLength);
         ImportResult result = File::import(reader, &file);
+
         if (result != ImportResult::success)
         {
             return 0;

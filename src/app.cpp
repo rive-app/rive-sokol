@@ -88,7 +88,9 @@ static struct App
     rive::Renderer*            m_Renderer;
     // Sokol
     sg_shader                  m_MainShader;
+    sg_pipeline                m_TessellationIsClippingPipelines[256];
     sg_pipeline                m_TessellationPipeline;
+    sg_pipeline                m_TessellationApplyClippingPipeline;
     sg_pipeline                m_StencilPipelineNonClippingCCW;
     sg_pipeline                m_StencilPipelineNonClippingCW;
     sg_pipeline                m_StencilPipelineClippingCCW;
@@ -406,6 +408,39 @@ bool AppBootstrap(int argc, char const *argv[])
     tessellationPipeline.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
     tessellationPipeline.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
 
+    sg_pipeline_desc tessellationApplyingClippingPipeline     = {};
+    tessellationApplyingClippingPipeline.shader               = tessellationPipeline.shader;
+    tessellationApplyingClippingPipeline.index_type           = SG_INDEXTYPE_UINT32;
+    tessellationApplyingClippingPipeline.layout.attrs[0]      = { .format = SG_VERTEXFORMAT_FLOAT2 };
+    tessellationApplyingClippingPipeline.colors[0].write_mask = SG_COLORMASK_NONE;
+
+    /*
+    gl.colorMask(false, false, false, false);
+    gl.clear(gl.STENCIL_BUFFER_BIT);
+    gl.stencilMask(0xFF);
+    gl.stencilFunc(gl.ALWAYS, 0x0, 0xFF);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR);
+    */
+
+    tessellationApplyingClippingPipeline.stencil = {
+        .enabled = true,
+        .front = {
+            .compare       = SG_COMPAREFUNC_ALWAYS,
+            .fail_op       = SG_STENCILOP_KEEP,
+            .depth_fail_op = SG_STENCILOP_KEEP,
+            .pass_op       = SG_STENCILOP_INCR_CLAMP,
+        },
+        .back = {
+            .compare       = SG_COMPAREFUNC_ALWAYS,
+            .fail_op       = SG_STENCILOP_KEEP,
+            .depth_fail_op = SG_STENCILOP_KEEP,
+            .pass_op       = SG_STENCILOP_INCR_CLAMP,
+        },
+        .read_mask  = 0xFF,
+        .write_mask = 0xFF,
+        .ref        = 0x0,
+    };
+
     // Stencil to cover pipelines
     sg_pipeline_desc pipelineStencilDesc               = {};
     pipelineStencilDesc.shader                         = tessellationPipeline.shader;
@@ -494,16 +529,18 @@ bool AppBootstrap(int argc, char const *argv[])
     passAction.colors[0].action = SG_ACTION_CLEAR;
     passAction.colors[0].value  = { 0.25f, 0.25f, 0.25f, 1.0f};
 
-    g_app.m_MainShader               = tessellationPipeline.shader;
-    g_app.m_TessellationPipeline     = sg_make_pipeline(&tessellationPipeline);
-    g_app.m_DebugViewContourPipeline = sg_make_pipeline(&debugViewContourPipelineDesc);
-    g_app.m_PassAction               = passAction;
-    g_app.m_Bindings                 = {};
+    g_app.m_MainShader                        = tessellationPipeline.shader;
+    g_app.m_TessellationPipeline              = sg_make_pipeline(&tessellationPipeline);
+    g_app.m_TessellationApplyClippingPipeline = sg_make_pipeline(&tessellationApplyingClippingPipeline);
+    g_app.m_DebugViewContourPipeline          = sg_make_pipeline(&debugViewContourPipelineDesc);
+    g_app.m_PassAction                        = passAction;
+    g_app.m_Bindings                          = {};
 
     ////////////////////////////////////////////////////
     // Rive setup
     ////////////////////////////////////////////////////
     rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
+    rive::setRenderMode(rive::MODE_TESSELLATION);
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
     g_app.m_Renderer = rive::makeRenderer();
 
@@ -749,159 +786,158 @@ static void DebugViewContour(App::GpuBuffer* vxBuffer, App::GpuBuffer* ixBuffer,
     sg_draw(0, numElements, 1);
 }
 
-static void StencilToCoverRenderFn(uint32_t width, uint32_t height)
+struct AppTessellationRenderer
 {
-    rive::StencilToCoverRenderer* renderer = (rive::StencilToCoverRenderer*) g_app.m_Renderer;
-    sg_bindings& bindings                  = g_app.m_Bindings;
-    vs_params_t vsUniforms                 = {};
-    fs_paint_t fsUniforms                  = {};
-    sg_range vsUniformsRange               = SG_RANGE(vsUniforms);
-    sg_range fsUniformsRange               = SG_RANGE(fsUniforms);
-    rive::RenderPaint* lastPaint           = 0;
+    vs_params_t        m_VsUniforms;
+    fs_paint_t         m_FsUniforms;
+    sg_range           m_VsUniformsRange;
+    sg_range           m_FsUniformsRange;
+    rive::RenderPaint* m_Paint;
+    uint32_t           m_Width;
+    uint32_t           m_Height;
+    uint8_t            m_PaintDirty         : 1;
+    uint8_t            m_IsApplyingClipping : 1;
+    uint8_t            m_IsClipping         : 1;
 
-    mat4x4 mtxCam;
-    GetCameraMatrix(mtxCam, width, height);
-    mat4x4_dup((float (*)[4]) vsUniforms.projection, mtxCam);
-
-    mat4x4_identity((float (*)[4]) vsUniforms.transformLocal);
-    sg_apply_viewport(0, 0, width, height, true);
-
-    for (int i = 0; i < renderer->getDrawCallCount(); ++i)
+    static void Frame(uint32_t width, uint32_t height)
     {
-        const rive::PathDrawCall dc = renderer->getDrawCall(i);
-        rive::RenderPath* path      = dc.m_Path;
-        rive::RenderPaint* paint    = dc.m_Paint;
-        rive::Mat2D transformWorld  = dc.m_TransformWorld;
-        rive::Mat2D transformLocal  = dc.m_TransformLocal;
-
-        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) path)->getDrawBuffers();
-
-        if (g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR)
+        rive::TessellationRenderer* riveRenderer = (rive::TessellationRenderer*) g_app.m_Renderer;
+        AppTessellationRenderer obj(width, height);
+        for (int i = 0; i < riveRenderer->getDrawEventCount(); ++i)
         {
-            if (dc.m_Tag == rive::TAG_STENCIL)
+            const rive::PathDrawEvent evt = riveRenderer->getDrawEvent(i);
+            switch(evt.m_Type)
             {
-                App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
-                App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
-                if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
-                {
-                    const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
-                    fs_contour_t fsContourParams = {};
-                    memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
-                    Mat2DToMat4(transformWorld, (float (*)[4]) vsUniforms.transform);
-
-                    DebugViewContour(
-                        contourVertexBuffer,
-                        contourIndexBuffer,
-                        contourIndexBuffer->m_DataSize / sizeof(int),
-                        vsUniforms,
-                        fsContourParams);
-                }
+                case rive::EVENT_SET_PAINT:
+                    obj.SetPaint(evt);
+                    break;
+                case rive::EVENT_DRAW:
+                    if (g_app.m_DebugView != App::DEBUG_VIEW_NONE)
+                         obj.HandleDebugViews(evt);
+                    else obj.DrawPass(evt);
+                    break;
+                case rive::EVENT_CLIPPING_BEGIN:
+                    obj.BeginClipping(evt);
+                    break;
+                case rive::EVENT_CLIPPING_END:
+                    obj.EndClipping(evt);
+                    break;
+                case rive::EVENT_CLIPPING_DISABLE:
+                    obj.CancelClipping(evt);
+                default:break;
             }
-            continue;
-        }
-
-        // fixme: clipping
-        bool isClipping = false;
-        if (dc.m_Tag == rive::TAG_STENCIL)
-        {
-            App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
-            App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
-
-            if (!IS_BUFFER_VALID(contourVertexBuffer) ||
-                !IS_BUFFER_VALID(contourIndexBuffer))
-            {
-                continue;
-            }
-
-            sg_pipeline pipeline = {};
-
-            if (isClipping)
-            {
-                if (dc.m_IsEvenOdd && (dc.m_Idx % 2) != 0)
-                {
-                    pipeline = g_app.m_StencilPipelineClippingCW;
-                }
-                else
-                {
-                    pipeline = g_app.m_StencilPipelineClippingCCW;
-                }
-            }
-            else
-            {
-                if (dc.m_IsEvenOdd && (dc.m_Idx % 2) != 0)
-                {
-                    pipeline = g_app.m_StencilPipelineNonClippingCW;
-                }
-                else
-                {
-                    pipeline = g_app.m_StencilPipelineNonClippingCCW;
-                }
-            }
-
-            bindings.vertex_buffers[0] = contourVertexBuffer->m_Handle;
-            bindings.index_buffer      = contourIndexBuffer->m_Handle;
-            Mat2DToMat4(transformWorld, (float (*)[4]) vsUniforms.transform);
-            sg_apply_pipeline(pipeline);
-            sg_apply_bindings(&bindings);
-            sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vsUniformsRange);
-            sg_draw(0, contourIndexBuffer->m_DataSize / sizeof(int), 1);
-
-        }
-        else if (dc.m_Tag == rive::TAG_COVER)
-        {
-            App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_CoverVertexBuffer;
-            App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_CoverIndexBuffer;
-
-            if (!IS_BUFFER_VALID(coverVertexBuffer) ||
-                !IS_BUFFER_VALID(coverIndexBuffer))
-            {
-                continue;
-            }
-
-            bindings.vertex_buffers[0] = coverVertexBuffer->m_Handle;
-            bindings.index_buffer      = coverIndexBuffer->m_Handle;
-            Mat2DToMat4(transformWorld, (float (*)[4]) vsUniforms.transform);
-            Mat2DToMat4(transformLocal, (float (*)[4]) vsUniforms.transformLocal);
-
-            sg_pipeline pipeline = isClipping ? g_app.m_StencilPipelineCoverClipping : g_app.m_StencilPipelineCoverNonClipping;
-            sg_apply_pipeline(pipeline);
-            sg_apply_bindings(&bindings);
-            sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vsUniformsRange);
-            if (lastPaint != paint)
-            {
-                lastPaint = paint;
-                FillPaintData(paint, fsUniforms);
-                sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &fsUniformsRange);
-            }
-            sg_draw(0, 2 * 3, 1);
         }
     }
-}
 
-static void TessellationRenderFn(uint32_t width, uint32_t height)
-{
-    rive::TessellationRenderer* renderer = (rive::TessellationRenderer*) g_app.m_Renderer;
-    sg_bindings& bindings                = g_app.m_Bindings;
-    rive::RenderPaint* lastPaint         = 0;
-    vs_params_t vsUniforms               = {};
-    fs_paint_t fsUniforms                = {};
-    sg_range vsUniformsRange             = SG_RANGE(vsUniforms);
-    sg_range fsUniformsRange             = SG_RANGE(fsUniforms);
-
-    mat4x4 mtxCam;
-    GetCameraMatrix(mtxCam, width, height);
-    mat4x4_dup((float (*)[4]) vsUniforms.projection, mtxCam);
-    mat4x4_identity((float (*)[4]) vsUniforms.transformLocal);
-
-    sg_apply_pipeline(g_app.m_TessellationPipeline);
-    sg_apply_viewport(0, 0, width, height, true);
-
-    for (int i = 0; i < renderer->getDrawCallCount(); ++i)
+    AppTessellationRenderer(uint32_t width, uint32_t height)
     {
-        const rive::PathDrawCall dc = renderer->getDrawCall(i);
-        rive::RenderPath* path      = dc.m_Path;
-        rive::RenderPaint* paint    = dc.m_Paint;
-        rive::Mat2D transform       = dc.m_TransformWorld;
+        m_VsUniforms      = {};
+        m_FsUniforms      = {};
+        m_Paint           = 0;
+        m_VsUniformsRange = SG_RANGE(m_VsUniforms);
+        m_FsUniformsRange = SG_RANGE(m_FsUniforms);
+        m_Width           = width;
+        m_Height          = height;
+
+        mat4x4 mtxCam;
+        GetCameraMatrix(mtxCam, width, height);
+        mat4x4_dup((float (*)[4]) m_VsUniforms.projection, mtxCam);
+        mat4x4_identity((float (*)[4]) m_VsUniforms.transformLocal);
+        sg_apply_viewport(0, 0, width, height, true);
+    }
+
+    void SetPaint(const rive::PathDrawEvent& evt)
+    {
+        if (evt.m_Paint != 0 && m_Paint != evt.m_Paint)
+        {
+            m_Paint      = evt.m_Paint;
+            m_PaintDirty = true;
+        }
+    }
+
+    void BeginClipping(const rive::PathDrawEvent& evt)
+    {
+        m_IsApplyingClipping  = true;
+        m_IsClipping          = true;
+        sg_pass_action action = {};
+        action.colors[0]      = { .action = SG_ACTION_DONTCARE };
+        action.depth          = { .action = SG_ACTION_DONTCARE };
+        action.stencil        = { .action = SG_ACTION_CLEAR    };
+
+        sg_end_pass();
+        sg_begin_default_pass(&action, m_Width, m_Height);
+    }
+
+    void EndClipping(const rive::PathDrawEvent& evt)
+    {
+        m_IsApplyingClipping  = false;
+        sg_pass_action action = {};
+        action.colors[0]      = { .action = SG_ACTION_DONTCARE };
+        action.depth          = { .action = SG_ACTION_DONTCARE };
+        action.stencil        = { .action = SG_ACTION_DONTCARE };
+
+        sg_end_pass();
+        sg_begin_default_pass(&action, m_Width, m_Height);
+    }
+
+    void CancelClipping(const rive::PathDrawEvent& evt)
+    {
+        m_IsClipping = false;
+    }
+
+    sg_pipeline GetIsClippingPipeline(uint8_t v)
+    {
+        sg_pipeline* p = &g_app.m_TessellationIsClippingPipelines[v];
+        if (p->id == SG_INVALID_ID)
+        {
+            sg_pipeline_desc pDesc               = {};
+            pDesc.shader                         = g_app.m_MainShader;
+            pDesc.index_type                     = SG_INDEXTYPE_UINT32;
+            pDesc.layout.attrs[0]                = { .format = SG_VERTEXFORMAT_FLOAT2 };
+            pDesc.colors[0].blend.enabled        = true;
+            pDesc.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+            pDesc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+
+            pDesc.stencil.enabled                = true;
+            pDesc.stencil.front.compare          = SG_COMPAREFUNC_EQUAL;
+            pDesc.stencil.front.fail_op          = SG_STENCILOP_KEEP;
+            pDesc.stencil.front.depth_fail_op    = SG_STENCILOP_KEEP;
+            pDesc.stencil.front.pass_op          = SG_STENCILOP_KEEP;
+            pDesc.stencil.back.compare           = SG_COMPAREFUNC_EQUAL;
+            pDesc.stencil.back.fail_op           = SG_STENCILOP_KEEP;
+            pDesc.stencil.back.depth_fail_op     = SG_STENCILOP_KEEP;
+            pDesc.stencil.back.pass_op           = SG_STENCILOP_KEEP;
+            pDesc.stencil.ref                    = v;
+            pDesc.stencil.write_mask             = 0xFF;
+            pDesc.stencil.read_mask              = 0xFF;
+            pDesc.colors[0].write_mask           = SG_COLORMASK_RGBA;
+
+            *p = sg_make_pipeline(&pDesc);
+        }
+
+        return *p;
+
+        /*
+        glStencilFuncSeparate(gl_face,
+                        _sg_gl_compare_func(state_sfs->compare),
+                        state_ss->ref,
+                        state_ss->read_mask);
+
+        gl.stencilFunc(gl.EQUAL, this.appliedClips.length - (_clipArtboard ? 0 : 1), 0xFF);
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+        gl.colorMask(true, true, true, true);
+        */
+    }
+
+    void DrawPass(const rive::PathDrawEvent& evt)
+    {
+        /*
+        if (m_IsApplyingClipping)
+            return;
+        */
+
+        rive::RenderPath* path   = evt.m_Path;
+        rive::Mat2D transform    = evt.m_TransformWorld;
         rive::TessellationRenderPath::Buffers buffers = ((rive::TessellationRenderPath*) path)->getDrawBuffers();
 
         App::GpuBuffer* vertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
@@ -909,42 +945,234 @@ static void TessellationRenderFn(uint32_t width, uint32_t height)
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
-            continue;
+            return;
         }
 
-        Mat2DToMat4(transform, (float (*)[4]) vsUniforms.transform);
+        Mat2DToMat4(transform, (float (*)[4]) m_VsUniforms.transform);
         int drawLength = (indexBuffer->m_DataSize / sizeof(int)) * 3;
 
-        if (g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR)
-        {
-            const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
-            fs_contour_t fsContourParams                = {};
-            memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
-            DebugViewContour(
-                vertexBuffer,
-                indexBuffer,
-                drawLength,
-                vsUniforms,
-                fsContourParams);
-            continue;
-        }
-
+        sg_bindings& bindings      = g_app.m_Bindings;
         bindings.vertex_buffers[0] = vertexBuffer->m_Handle;
         bindings.index_buffer      = indexBuffer->m_Handle;
 
-        sg_apply_bindings(&bindings);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vsUniformsRange);
+        sg_pipeline& pipeline = g_app.m_TessellationPipeline;
 
-        if (lastPaint != paint)
+        if (m_IsApplyingClipping)
         {
-            lastPaint = paint;
-            FillPaintData(paint, fsUniforms);
-            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &fsUniformsRange);
+            pipeline = g_app.m_TessellationApplyClippingPipeline;
+        }
+        else if (m_IsClipping)
+        {
+            pipeline = GetIsClippingPipeline(evt.m_AppliedClipCount);
+        }
+
+        sg_apply_pipeline(pipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+
+        if (m_PaintDirty && !m_IsApplyingClipping)
+        {
+            FillPaintData(m_Paint, m_FsUniforms);
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
+            m_PaintDirty = false;
         }
 
         sg_draw(0, drawLength, 1);
     }
-}
+
+    void HandleDebugViews(const rive::PathDrawEvent& evt)
+    {
+        assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
+        rive::TessellationRenderPath::Buffers buffers = ((rive::TessellationRenderPath*) evt.m_Path)->getDrawBuffers();
+        App::GpuBuffer* vertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
+
+        if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
+        {
+            return;
+        }
+
+        const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) m_Paint)->getData();
+        fs_contour_t fsContourParams                = {};
+        memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
+        Mat2DToMat4(evt.m_TransformWorld, (float (*)[4]) m_VsUniforms.transform);
+        DebugViewContour(
+            vertexBuffer,
+            indexBuffer,
+            (indexBuffer->m_DataSize / sizeof(int)) * 3,
+            m_VsUniforms,
+            fsContourParams);
+    }
+};
+
+struct AppSTCRenderer
+{
+    vs_params_t        m_VsUniforms;
+    fs_paint_t         m_FsUniforms;
+    sg_range           m_VsUniformsRange;
+    sg_range           m_FsUniformsRange;
+    rive::RenderPaint* m_Paint;
+    bool               m_PaintDirty;
+
+    static void Frame(uint32_t width, uint32_t height)
+    {
+        rive::StencilToCoverRenderer* riveRenderer = (rive::StencilToCoverRenderer*) g_app.m_Renderer;
+        AppSTCRenderer obj(width, height);
+
+        for (int i = 0; i < riveRenderer->getDrawEventCount(); ++i)
+        {
+            const rive::PathDrawEvent evt = riveRenderer->getDrawEvent(i);
+            switch(evt.m_Type)
+            {
+                case rive::EVENT_SET_PAINT:
+                    obj.SetPaint(evt);
+                break;
+                case rive::EVENT_DRAW_STENCIL:
+                    if (g_app.m_DebugView != App::DEBUG_VIEW_NONE)
+                         obj.HandleDebugViews(evt);
+                    else obj.StencilPass(evt);
+                break;
+                case rive::EVENT_DRAW_COVER:
+                    obj.CoverPass(evt);
+                break;
+                default:break;
+            }
+        }
+    }
+
+    AppSTCRenderer(uint32_t width, uint32_t height)
+    {
+        m_VsUniforms      = {};
+        m_FsUniforms      = {};
+        m_Paint           = 0;
+        m_PaintDirty      = false;
+        m_VsUniformsRange = SG_RANGE(m_VsUniforms);
+        m_FsUniformsRange = SG_RANGE(m_FsUniforms);
+
+        mat4x4 mtxCam;
+        GetCameraMatrix(mtxCam, width, height);
+        mat4x4_dup((float (*)[4]) m_VsUniforms.projection, mtxCam);
+
+        mat4x4_identity((float (*)[4]) m_VsUniforms.transformLocal);
+        sg_apply_viewport(0, 0, width, height, true);
+    }
+
+    void SetPaint(const rive::PathDrawEvent& evt)
+    {
+        if (evt.m_Paint != 0 && m_Paint != evt.m_Paint)
+        {
+            m_Paint      = evt.m_Paint;
+            m_PaintDirty = true;
+        }
+    }
+
+    void StencilPass(const rive::PathDrawEvent& evt)
+    {
+        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) evt.m_Path)->getDrawBuffers();
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
+
+        if (!IS_BUFFER_VALID(contourVertexBuffer) ||
+            !IS_BUFFER_VALID(contourIndexBuffer))
+        {
+            return;
+        }
+
+        sg_bindings& bindings = g_app.m_Bindings;
+        sg_pipeline pipeline = {};
+
+        if (evt.m_IsClipping)
+        {
+            if (evt.m_IsEvenOdd && (evt.m_Idx % 2) != 0)
+            {
+                pipeline = g_app.m_StencilPipelineClippingCW;
+            }
+            else
+            {
+                pipeline = g_app.m_StencilPipelineClippingCCW;
+            }
+        }
+        else
+        {
+            if (evt.m_IsEvenOdd && (evt.m_Idx % 2) != 0)
+            {
+                pipeline = g_app.m_StencilPipelineNonClippingCW;
+            }
+            else
+            {
+                pipeline = g_app.m_StencilPipelineNonClippingCCW;
+            }
+        }
+
+        bindings.vertex_buffers[0] = contourVertexBuffer->m_Handle;
+        bindings.index_buffer      = contourIndexBuffer->m_Handle;
+
+        rive::Mat2D transformWorld  = evt.m_TransformWorld;
+        Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+        sg_apply_pipeline(pipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+        sg_draw(0, contourIndexBuffer->m_DataSize / sizeof(int), 1);
+    }
+
+    void CoverPass(const rive::PathDrawEvent& evt)
+    {
+        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) evt.m_Path)->getDrawBuffers();
+        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_CoverVertexBuffer;
+        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_CoverIndexBuffer;
+
+        if (!IS_BUFFER_VALID(coverVertexBuffer) ||
+            !IS_BUFFER_VALID(coverIndexBuffer))
+        {
+            return;
+        }
+
+        sg_bindings& bindings = g_app.m_Bindings;
+        bindings.vertex_buffers[0] = coverVertexBuffer->m_Handle;
+        bindings.index_buffer      = coverIndexBuffer->m_Handle;
+
+        rive::Mat2D transformWorld  = evt.m_TransformWorld;
+        rive::Mat2D transformLocal  = evt.m_TransformLocal;
+        Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+        Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
+
+        sg_pipeline pipeline = evt.m_IsClipping ? g_app.m_StencilPipelineCoverClipping : g_app.m_StencilPipelineCoverNonClipping;
+        sg_apply_pipeline(pipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+        if (m_PaintDirty)
+        {
+            FillPaintData(m_Paint, m_FsUniforms);
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
+            m_PaintDirty = false;
+        }
+        sg_draw(0, 2 * 3, 1);
+    }
+
+    void HandleDebugViews(const rive::PathDrawEvent& evt)
+    {
+        assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
+        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) evt.m_Path)->getDrawBuffers();
+        App::GpuBuffer* contourVertexBuffer             = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
+        App::GpuBuffer* contourIndexBuffer              = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
+        if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
+        {
+            const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) m_Paint)->getData();
+            fs_contour_t fsContourParams = {};
+            memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
+
+            rive::Mat2D transformWorld  = evt.m_TransformWorld;
+            Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+
+            DebugViewContour(
+                contourVertexBuffer,
+                contourIndexBuffer,
+                contourIndexBuffer->m_DataSize / sizeof(int),
+                m_VsUniforms,
+                fsContourParams);
+        }
+    }
+};
 #undef IS_BUFFER_VALID
 
 void AppRenderRive(uint32_t width, uint32_t height)
@@ -952,10 +1180,10 @@ void AppRenderRive(uint32_t width, uint32_t height)
     switch(rive::getRenderMode())
     {
         case rive::MODE_TESSELLATION:
-            TessellationRenderFn(width, height);
+            AppTessellationRenderer::Frame(width, height);
             break;
         case rive::MODE_STENCIL_TO_COVER:
-            StencilToCoverRenderFn(width, height);
+            AppSTCRenderer::Frame(width, height);
             break;
         default:break;
     }
@@ -977,6 +1205,8 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
         delete g_app.m_Renderer;
         g_app.m_Renderer = rive::makeRenderer();
     }
+
+    ((rive::SharedRenderer*)g_app.m_Renderer)->setClippingSupport(g_app.m_DebugView == App::DEBUG_VIEW_NONE);
 
     rive::setContourQuality(contourQuality);
 }
@@ -1019,7 +1249,7 @@ void AppRun()
 
         ImGui::Text("Render Mode");
         ImGui::RadioButton("Tessellation", &renderModeChoice, (int) rive::MODE_TESSELLATION);
-        ImGui::RadioButton("StencilToCover", &renderModeChoice, (int) rive::MODE_STENCIL_TO_COVER);
+        ImGui::RadioButton("Stencil To Cover", &renderModeChoice, (int) rive::MODE_STENCIL_TO_COVER);
 
         ImGui::Spacing();
         ImGui::Separator();
