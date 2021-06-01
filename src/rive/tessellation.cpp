@@ -254,6 +254,11 @@ namespace rive
                 ((TessellationRenderPath*) pd.m_Path)->drawMesh(m_Transform);
             }
 
+            pushDrawEvent({
+                .m_Type             = EVENT_CLIPPING_END,
+                .m_AppliedClipCount = (uint32_t) m_ClipPaths.Size(),
+            });
+
             m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
             m_AppliedClips.SetSize(0);
 
@@ -261,11 +266,6 @@ namespace rive
             {
                 m_AppliedClips.Push(m_ClipPaths[i]);
             }
-
-            pushDrawEvent({
-                .m_Type             = EVENT_CLIPPING_END,
-                .m_AppliedClipCount = (uint32_t) m_AppliedClips.Size(),
-            });
         }
         else
         {

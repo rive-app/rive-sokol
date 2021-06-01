@@ -793,8 +793,9 @@ struct AppTessellationRenderer
     sg_range           m_VsUniformsRange;
     sg_range           m_FsUniformsRange;
     rive::RenderPaint* m_Paint;
-    uint32_t           m_Width;
-    uint32_t           m_Height;
+    uint32_t           m_Width  : 16;
+    uint32_t           m_Height : 16;
+    uint8_t            m_AppliedClipCount;
     uint8_t            m_PaintDirty         : 1;
     uint8_t            m_IsApplyingClipping : 1;
     uint8_t            m_IsClipping         : 1;
@@ -871,6 +872,8 @@ struct AppTessellationRenderer
     void EndClipping(const rive::PathDrawEvent& evt)
     {
         m_IsApplyingClipping  = false;
+        m_AppliedClipCount    = evt.m_AppliedClipCount;
+
         sg_pass_action action = {};
         action.colors[0]      = { .action = SG_ACTION_DONTCARE };
         action.depth          = { .action = SG_ACTION_DONTCARE };
@@ -963,7 +966,7 @@ struct AppTessellationRenderer
         }
         else if (m_IsClipping)
         {
-            pipeline = GetIsClippingPipeline(evt.m_AppliedClipCount);
+            pipeline = GetIsClippingPipeline(m_AppliedClipCount);
         }
 
         sg_apply_pipeline(pipeline);
