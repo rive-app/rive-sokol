@@ -240,12 +240,24 @@ namespace rive
 
         if (m_ClipPaths.Size() > 0)
         {
+            pushDrawEvent({ .m_Type = EVENT_CLIPPING_BEGIN });
+
             for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
             {
-                //const PathDescriptor& pd = m_ClipPaths[i];
-                //TessellationRenderPath* p = (TessellationRenderPath*) pd.m_Path;
-                //p->drawMesh(pd.m_Transform);
+                const PathDescriptor& pd = m_ClipPaths[i];
+                pushDrawEvent({
+                    .m_Type           = EVENT_DRAW,
+                    .m_Path           = pd.m_Path,
+                    .m_TransformWorld = pd.m_Transform,
+                });
+
+                ((TessellationRenderPath*) pd.m_Path)->drawMesh(m_Transform);
             }
+
+            pushDrawEvent({
+                .m_Type             = EVENT_CLIPPING_END,
+                .m_AppliedClipCount = (uint32_t) m_ClipPaths.Size(),
+            });
 
             m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
             m_AppliedClips.SetSize(0);
@@ -254,6 +266,10 @@ namespace rive
             {
                 m_AppliedClips.Push(m_ClipPaths[i]);
             }
+        }
+        else
+        {
+            pushDrawEvent({ .m_Type = EVENT_CLIPPING_DISABLE });
         }
     }
 
@@ -267,15 +283,18 @@ namespace rive
             return;
         }
 
-        if (m_DrawCalls.Size() == m_DrawCalls.Capacity())
+        if (m_IsClippingSupported && m_IsClippingDirty)
         {
-            m_DrawCalls.SetCapacity(m_DrawCalls.Size() + 1);
+            applyClipping();
         }
 
-        PathDrawCall dc = {.m_Path = path, .m_Paint = paint, .m_TransformWorld = m_Transform};
-        m_DrawCalls.Push(dc);
+        setPaint(rp);
+        pushDrawEvent({
+            .m_Type           = EVENT_DRAW,
+            .m_Path           = path,
+            .m_TransformWorld = m_Transform
+        });
 
-        applyClipping();
         p->drawMesh(m_Transform);
     }
 }

@@ -7,11 +7,103 @@
 
 namespace rive
 {
-    void StencilToCoverRenderer::applyClipping()
+    StencilToCoverRenderer::StencilToCoverRenderer()
     {
+        m_FullscreenPath = new StencilToCoverRenderPath;
 
+        m_FullscreenPath->m_Limits = {
+            .m_MinX = -1.0f,
+            .m_MinY = -1.0f,
+            .m_MaxX =  1.0f,
+            .m_MaxY =  1.0f,
+        };
+
+        m_FullscreenPath->updateBuffers();
     }
 
+    StencilToCoverRenderer::~StencilToCoverRenderer()
+    {
+        if (m_FullscreenPath)
+        {
+            delete m_FullscreenPath;
+        }
+    }
+
+    void StencilToCoverRenderer::applyClipping()
+    {
+        m_IsClippingDirty = false;
+        bool same = true;
+        if (m_ClipPaths.Size() == m_AppliedClips.Size())
+        {
+            for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
+            {
+                const PathDescriptor& pdA = m_ClipPaths[i];
+                const PathDescriptor& pdB = m_AppliedClips[i];
+
+                if (pdA.m_Path != pdB.m_Path || (pdA.m_Transform == pdB.m_Transform))
+                {
+                    same = false;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            same = false;
+        }
+
+        if (same)
+        {
+            return;
+        }
+
+        m_IsClipping = false;
+
+        pushDrawEvent({ .m_Type = EVENT_CLIPPING_BEGIN });
+
+        if (m_ClipPaths.Size() > 0)
+        {
+            for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
+            {
+                const PathDescriptor& pd = m_ClipPaths[i];
+                applyClipPath((StencilToCoverRenderPath*) pd.m_Path, pd.m_Transform);
+            }
+
+            m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
+            m_AppliedClips.SetSize(0);
+
+            for (int i = 0; i < m_ClipPaths.Size(); ++i)
+            {
+                m_AppliedClips.Push(m_ClipPaths[i]);
+            }
+        }
+
+        pushDrawEvent({ .m_Type = EVENT_CLIPPING_END });
+    }
+
+    void StencilToCoverRenderer::applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform)
+    {
+        bool isEvenOdd = path->getFillRule() == FillRule::evenOdd;
+        path->stencil(this, transform, 0, isEvenOdd, m_IsClipping);
+
+        if (m_IsClipping)
+        {
+            Mat2D identityTransform;
+            pushDrawEvent({
+                .m_Type           = EVENT_DRAW_COVER,
+                .m_Path           = m_FullscreenPath,
+                .m_TransformWorld = identityTransform,
+                .m_TransformLocal = identityTransform,
+                .m_IsClipping     = m_IsClipping,
+            });
+        }
+        else
+        {
+            path->cover(this, transform, Mat2D(), m_IsClipping);
+        }
+
+        m_IsClipping = true;
+    }
 
     void StencilToCoverRenderer::drawPath(RenderPath* path, RenderPaint* paint)
     {
@@ -23,9 +115,15 @@ namespace rive
             return;
         }
 
+        if (m_IsClippingSupported && m_IsClippingDirty)
+        {
+            applyClipping();
+        }
+
+        setPaint(rp);
         bool isEvenOdd = p->getFillRule() == FillRule::evenOdd;
-        p->stencil(this, rp, m_Transform, 0, isEvenOdd);
-        p->cover(this, rp, m_Transform, Mat2D());
+        p->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
+        p->cover(this, m_Transform, Mat2D(), m_IsClipping);
     }
 
     /* StencilToCoverRenderPath impl */
@@ -194,7 +292,7 @@ namespace rive
         m_RenderData.m_CoverIndexBuffer    = requestBuffer(m_RenderData.m_CoverIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) coverIndexData, sizeof(coverIndexData));
     }
 
-    void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, SharedRenderPaint* paint, const Mat2D& transform, unsigned int idx, bool isEvenOdd)
+    void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping)
     {
         if (m_Paths.Size() > 0)
         {
@@ -205,7 +303,7 @@ namespace rive
                 {
                     Mat2D stcPathTransform;
                     Mat2D::multiply(stcPathTransform, transform, m_Paths[i].m_Transform);
-                    stcPath->stencil(renderer, paint, stcPathTransform, idx++, isEvenOdd);
+                    stcPath->stencil(renderer, stcPathTransform, idx++, isEvenOdd, isClipping);
                 }
             }
             return;
@@ -221,17 +319,17 @@ namespace rive
             updateBuffers();
         }
 
-        renderer->pushDrawCall({
+        renderer->pushDrawEvent({
+            .m_Type           = EVENT_DRAW_STENCIL,
             .m_Path           = this,
-            .m_Paint          = paint,
             .m_TransformWorld = transform,
-            .m_IsEvenOdd      = isEvenOdd,
             .m_Idx            = idx,
-            .m_Tag            = TAG_STENCIL,
+            .m_IsEvenOdd      = isEvenOdd,
+            .m_IsClipping     = isClipping,
         });
     }
 
-    void StencilToCoverRenderPath::cover(SharedRenderer* renderer, SharedRenderPaint* paint, const Mat2D transform, const Mat2D transformLocal)
+    void StencilToCoverRenderPath::cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping)
     {
         if (m_Paths.Size() > 0)
         {
@@ -242,7 +340,7 @@ namespace rive
                 {
                     Mat2D stcWorldTransform;
                     Mat2D::multiply(stcWorldTransform, transform, m_Paths[i].m_Transform);
-                    stcPath->cover(renderer, paint, stcWorldTransform, m_Paths[i].m_Transform);
+                    stcPath->cover(renderer, stcWorldTransform, m_Paths[i].m_Transform, isClipping);
                 }
             }
             return;
@@ -258,12 +356,12 @@ namespace rive
             updateBuffers();
         }
 
-        renderer->pushDrawCall({
+        renderer->pushDrawEvent({
+            .m_Type           = EVENT_DRAW_COVER,
             .m_Path           = this,
-            .m_Paint          = paint,
             .m_TransformWorld = transform,
             .m_TransformLocal = transformLocal,
-            .m_Tag            = TAG_COVER,
+            .m_IsClipping     = isClipping,
         });
     }
 }
