@@ -254,6 +254,33 @@ static void ReloadArtboardContext(App::ArtboardContext* ctx)
     }
 }
 
+static void RemoveArtboardContext(uint8_t index)
+{
+    App::ArtboardContext& ctx = g_app.m_ArtboardContexts[index];
+
+    for (int i = 0; i < (int)ctx.m_Artboards.Size(); ++i)
+    {
+        App::ArtboardData& data = ctx.m_Artboards[i];
+        if (data.m_Artboard)
+        {
+            delete data.m_Artboard;
+            data.m_Artboard = 0;
+        }
+
+        if (data.m_AnimationInstance)
+        {
+            delete data.m_AnimationInstance;
+            data.m_AnimationInstance = 0;
+        }
+    }
+
+    ctx.m_Artboards.SetSize(0);
+    ctx.m_Artboards.SetCapacity(0);
+    ctx.m_Data       = 0;
+    ctx.m_DataSize   = 0;
+    ctx.m_CloneCount = 0;
+}
+
 static inline void Mat2DToMat4(const rive::Mat2D m2, mat4x4 m4)
 {
     m4[0][0] = m2[0];
@@ -565,7 +592,7 @@ bool AppBootstrap(int argc, char const *argv[])
     // Rive setup
     ////////////////////////////////////////////////////
     rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
-    // rive::setRenderMode(rive::MODE_TESSELLATION);
+    //rive::setRenderMode(rive::MODE_TESSELLATION);
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
     g_app.m_Renderer = rive::makeRenderer();
 
@@ -1024,6 +1051,7 @@ struct AppSTCRenderer
     sg_range           m_VsUniformsRange;
     sg_range           m_FsUniformsRange;
     rive::RenderPaint* m_Paint;
+    mat4x4             m_CameraMtx;
     uint32_t           m_Width              : 16;
     uint32_t           m_Height             : 16;
     uint8_t            m_PaintDirty         : 1;
@@ -1075,6 +1103,7 @@ struct AppSTCRenderer
         mat4x4 mtxCam;
         GetCameraMatrix(mtxCam, width, height);
         mat4x4_dup((float (*)[4]) m_VsUniforms.projection, mtxCam);
+        mat4x4_dup(m_CameraMtx, mtxCam);
 
         mat4x4_identity((float (*)[4]) m_VsUniforms.transformLocal);
         sg_apply_viewport(0, 0, width, height, true);
@@ -1095,7 +1124,7 @@ struct AppSTCRenderer
         sg_pass_action action = {};
         action.colors[0]      = { .action = SG_ACTION_DONTCARE };
         action.depth          = { .action = SG_ACTION_DONTCARE };
-        action.stencil        = { .action = SG_ACTION_CLEAR, .value = 0xFF };
+        action.stencil        = { .action = SG_ACTION_CLEAR, .value = 0x00 };
 
         /*
         gl.enable(gl.STENCIL_TEST);
@@ -1191,10 +1220,17 @@ struct AppSTCRenderer
         Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
 
         sg_pipeline pipeline = {};
+        bool restoreCamera = false;
 
         if (m_IsApplyingClipping)
         {
             pipeline = g_app.m_StencilPipelineCoverIsApplyingCLipping;
+
+            if (evt.m_IsClipping)
+            {
+                mat4x4_identity((float (*)[4]) m_VsUniforms.projection);
+                restoreCamera = true;
+            }
         }
         else
         {
@@ -1218,6 +1254,11 @@ struct AppSTCRenderer
             m_PaintDirty = false;
         }
         sg_draw(0, 2 * 3, 1);
+
+        if (restoreCamera)
+        {
+            mat4x4_dup((float (*)[4]) m_VsUniforms.projection, m_CameraMtx);
+        }
     }
 
     void HandleDebugViews(const rive::PathDrawEvent& evt)
@@ -1260,7 +1301,7 @@ void AppRenderRive(uint32_t width, uint32_t height)
     }
 }
 
-void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* backgroundColor)
+void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* backgroundColor, bool clippingSupported)
 {
     g_app.m_PassAction.colors[0].value.r = backgroundColor[0];
     g_app.m_PassAction.colors[0].value.g = backgroundColor[1];
@@ -1277,7 +1318,8 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
         g_app.m_Renderer = rive::makeRenderer();
     }
 
-    ((rive::SharedRenderer*)g_app.m_Renderer)->setClippingSupport(g_app.m_DebugView == App::DEBUG_VIEW_NONE);
+    rive::SharedRenderer* renderer = ((rive::SharedRenderer*) g_app.m_Renderer);
+    renderer->setClippingSupport(g_app.m_DebugView == App::DEBUG_VIEW_NONE && clippingSupported);
 
     rive::setContourQuality(contourQuality);
 }
@@ -1302,6 +1344,7 @@ void AppRun()
     float mouseLastX         = 0.0f;
     float mouseLastY         = 0.0f;
     float backgroundColor[3] = { 0.25f, 0.25f, 0.25f };
+    bool clippingSupported   = true;
 
     while (!glfwWindowShouldClose(g_app.m_Window))
     {
@@ -1317,6 +1360,7 @@ void AppRun()
         ImGui::Begin("Viewer Configuration");
         ImGui::ColorEdit3("Background Color", backgroundColor);
         ImGui::SliderFloat("Path Quality", &contourQuality, 0.0f, 1.0f);
+        ImGui::Checkbox("Clipping", &clippingSupported);
 
         ImGui::Text("Render Mode");
         ImGui::RadioButton("Tessellation", &renderModeChoice, (int) rive::MODE_TESSELLATION);
@@ -1352,6 +1396,11 @@ void AppRun()
             snprintf(cloneCountLabel, sizeof(cloneCountLabel), "%d: Clone Count", i);
 
             ImGui::Text("Artboard %d: '%s'", i, ctx.m_Artboards[0].m_Artboard->name().c_str());
+            if (ImGui::Button("x"))
+            {
+                RemoveArtboardContext(i);
+            }
+            ImGui::SameLine();
             ImGui::SliderInt(cloneCountLabel, &ctx.m_CloneCount, 1, 10);
             UpdateArtboardCloneCount(ctx);
         }
@@ -1378,7 +1427,7 @@ void AppRun()
         mouseLastX = io.MousePos.x;
         mouseLastY = io.MousePos.y;
 
-        AppConfigure((rive::RenderMode) renderModeChoice, contourQuality, backgroundColor);
+        AppConfigure((rive::RenderMode) renderModeChoice, contourQuality, backgroundColor, clippingSupported);
 
         timeUpdateRive = stm_now();
         AppUpdateRive(dt, window_width, window_height);

@@ -367,6 +367,7 @@ namespace rive
         m_DrawEvents.SetSize(0);
         m_IsClippingDirty = false;
         m_RenderPaint = 0;
+        m_IsClipping = false;
     }
 
     void SharedRenderer::transform(const Mat2D& transform)
