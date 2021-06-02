@@ -528,7 +528,6 @@ bool AppBootstrap(int argc, char const *argv[])
     pipelineStencilDesc.stencil.write_mask          = 0x7F;
     sg_pipeline coverPipelineClipping = sg_make_pipeline(&pipelineStencilDesc);
 
-
     pipelineStencilDesc.stencil.front.compare       = SG_COMPAREFUNC_NOT_EQUAL;
     pipelineStencilDesc.stencil.front.fail_op       = SG_STENCILOP_ZERO;
     pipelineStencilDesc.stencil.front.depth_fail_op = SG_STENCILOP_ZERO;
@@ -542,22 +541,6 @@ bool AppBootstrap(int argc, char const *argv[])
     pipelineStencilDesc.stencil.read_mask           = 0x7F;
     pipelineStencilDesc.colors[0].write_mask        = SG_COLORMASK_NONE;
     sg_pipeline coverPipelineIsApplyingClipping     = sg_make_pipeline(&pipelineStencilDesc);
-
-    /*
-    glStencilMask(state_ss->write_mask);
-    glStencilFuncSeparate(gl_face,
-                        _sg_gl_compare_func(state_sfs->compare),
-                        state_ss->ref,
-                        state_ss->read_mask);
-    glStencilOpSeparate(gl_face,
-                        _sg_gl_stencil_op(state_sfs->fail_op),
-                        _sg_gl_stencil_op(state_sfs->depth_fail_op),
-                        _sg_gl_stencil_op(state_sfs->pass_op));
-
-    gl.stencilMask(0xFF);
-    gl.stencilFunc(gl.NOTEQUAL, 0x80, 0x7F);
-    gl.stencilOp(gl.ZERO, gl.ZERO, gl.REPLACE);
-    */
 
     g_app.m_StencilPipelineNonClippingCCW          = stencilPipelineNonClippingCCW;
     g_app.m_StencilPipelineNonClippingCW           = stencilPipelineNonClippingCW;
@@ -1129,13 +1112,6 @@ struct AppSTCRenderer
         action.colors[0]      = { .action = SG_ACTION_DONTCARE };
         action.depth          = { .action = SG_ACTION_DONTCARE };
         action.stencil        = { .action = SG_ACTION_CLEAR, .value = 0x00 };
-
-        /*
-        gl.enable(gl.STENCIL_TEST);
-        gl.stencilMask(0xFF);
-        gl.clear(gl.STENCIL_BUFFER_BIT);
-        gl.colorMask(false, false, false, false);
-        */
 
         sg_end_pass();
         sg_begin_default_pass(&action, m_Width, m_Height);
