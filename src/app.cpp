@@ -998,7 +998,7 @@ struct AppTessellationRenderer
         bindings.vertex_buffers[0] = vertexBuffer->m_Handle;
         bindings.index_buffer      = indexBuffer->m_Handle;
 
-        sg_pipeline& pipeline = g_app.m_TessellationPipeline;
+        sg_pipeline pipeline = g_app.m_TessellationPipeline;
 
         if (m_IsApplyingClipping)
         {

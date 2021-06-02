@@ -84,7 +84,7 @@ namespace rive
     void StencilToCoverRenderer::applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform)
     {
         bool isEvenOdd = path->getFillRule() == FillRule::evenOdd;
-        path->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
+        path->stencil(this, transform, 0, isEvenOdd, m_IsClipping);
 
         if (m_IsClipping)
         {
@@ -99,7 +99,7 @@ namespace rive
         }
         else
         {
-            path->cover(this, m_Transform, Mat2D(), m_IsClipping);
+            path->cover(this, transform, Mat2D(), m_IsClipping);
         }
 
         m_IsClipping = true;
