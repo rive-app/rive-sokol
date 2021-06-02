@@ -892,6 +892,10 @@ struct AppTessellationRenderer
         m_Width           = width;
         m_Height          = height;
 
+        m_IsApplyingClipping = 0;
+        m_IsClipping         = 0;
+        m_PaintDirty         = 0;
+
         mat4x4 mtxCam;
         GetCameraMatrix(mtxCam, width, height);
         mat4x4_dup((float (*)[4]) m_VsUniforms.projection, mtxCam);
@@ -1229,6 +1233,7 @@ struct AppSTCRenderer
             if (evt.m_IsClipping)
             {
                 mat4x4_identity((float (*)[4]) m_VsUniforms.projection);
+                mat4x4_identity((float (*)[4]) m_VsUniforms.transform);
                 restoreCamera = true;
             }
         }
