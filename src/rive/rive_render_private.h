@@ -1,5 +1,5 @@
-#ifndef RIVE_SHARED_H
-#define RIVE_SHARED_H
+#ifndef _RIVE_RENDER_PRIVATE_H_
+#define _RIVE_RENDER_PRIVATE_H_
 
 namespace rive
 {
