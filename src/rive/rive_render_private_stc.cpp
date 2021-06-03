@@ -61,7 +61,8 @@ namespace rive
 
         m_IsClipping = false;
 
-        pushDrawEvent({ .m_Type = EVENT_CLIPPING_BEGIN });
+        PathDrawEvent evt = { .m_Type = EVENT_CLIPPING_BEGIN };
+        pushDrawEvent(evt);
 
         if (m_ClipPaths.Size() > 0)
         {
@@ -80,7 +81,8 @@ namespace rive
             }
         }
 
-        pushDrawEvent({ .m_Type = EVENT_CLIPPING_END });
+        evt.m_Type = EVENT_CLIPPING_END;
+        pushDrawEvent(evt);
     }
 
     void StencilToCoverRenderer::applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform)
@@ -91,13 +93,15 @@ namespace rive
         if (m_IsClipping)
         {
             Mat2D identityTransform;
-            pushDrawEvent({
+
+            PathDrawEvent evt = {
                 .m_Type           = EVENT_DRAW_COVER,
                 .m_Path           = m_FullscreenPath,
                 .m_TransformWorld = identityTransform,
                 .m_TransformLocal = identityTransform,
                 .m_IsClipping     = m_IsClipping,
-            });
+            };
+            pushDrawEvent(evt);
         }
         else
         {
@@ -319,14 +323,16 @@ namespace rive
             updateBuffers();
         }
 
-        renderer->pushDrawEvent({
+        PathDrawEvent evt = {
             .m_Type           = EVENT_DRAW_STENCIL,
             .m_Path           = this,
             .m_TransformWorld = transform,
             .m_Idx            = idx,
             .m_IsEvenOdd      = isEvenOdd,
             .m_IsClipping     = isClipping,
-        });
+        };
+
+        renderer->pushDrawEvent(evt);
     }
 
     void StencilToCoverRenderPath::cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping)
@@ -356,12 +362,14 @@ namespace rive
             updateBuffers();
         }
 
-        renderer->pushDrawEvent({
+        PathDrawEvent evt = {
             .m_Type           = EVENT_DRAW_COVER,
             .m_Path           = this,
             .m_TransformWorld = transform,
             .m_TransformLocal = transformLocal,
             .m_IsClipping     = isClipping,
-        });
+        };
+
+        renderer->pushDrawEvent(evt);
     }
 }
