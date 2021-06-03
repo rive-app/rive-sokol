@@ -3,8 +3,9 @@
 
 #include <renderer.hpp>
 #include <artboard.hpp>
-#include "rive/api.h"
-#include "rive/private.h"
+
+#include "rive/rive_render_api.h"
+#include "rive/rive_render_private.h"
 
 namespace rive
 {

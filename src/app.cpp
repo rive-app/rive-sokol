@@ -18,8 +18,8 @@
 #include <artboard.hpp>
 #include <file.hpp>
 
-#include "rive/api.h"
-#include "rive/shader.glsl.h"
+#include "rive/rive_render_api.h"
+#include "shaders.glsl.h"
 
 #define VIEWER_WINDOW_NAME "Rive Sokol Viewer"
 
@@ -681,11 +681,6 @@ bool AppBootstrap(int argc, char const *argv[])
 
 void AppUpdateRive(float dt, uint32_t width, uint32_t height)
 {
-    /*
-    rive::SharedRenderer* renderer = (rive::SharedRenderer*) g_app.m_Renderer;
-    renderer->startFrame();
-    */
-
     rive::startFrame(g_app.m_Renderer);
     rive::Renderer* renderer = (rive::Renderer*) g_app.m_Renderer;
 

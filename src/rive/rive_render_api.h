@@ -1,5 +1,5 @@
-#ifndef RIVE_API_H
-#define RIVE_API_H
+#ifndef RIVE_RENDER_API_H
+#define RIVE_RENDER_API_H
 
 namespace rive
 {
@@ -102,4 +102,4 @@ namespace rive
     const DrawBuffers   getDrawBuffers(HRenderPath path);
 }
 
-#endif /* RIVE_API_H */
+#endif /* RIVE_RENDER_API_H */

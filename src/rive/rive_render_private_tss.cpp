@@ -7,8 +7,8 @@
 #include <artboard.hpp>
 #include <renderer.hpp>
 
-#include "rive/api.h"
-#include "rive/private.h"
+#include "rive/rive_render_api.h"
+#include "rive/rive_render_private.h"
 
 #define PRINT_COMMANDS 0
 

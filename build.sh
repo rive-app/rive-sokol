@@ -66,7 +66,7 @@ platform_setup()
 build_assets()
 {
     echo "Building assets"
-    $SHDC_CMD --input assets/shader.glsl --output src/rive/shader.glsl.h --slang glsl330
+    $SHDC_CMD --input assets/shaders.glsl --output src/shaders.glsl.h --slang glsl330
 }
 
 if [ "$OPTION1" = "clean" ]; then
