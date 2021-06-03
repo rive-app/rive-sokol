@@ -12,8 +12,6 @@ namespace rive
     static RenderMode      g_RiveRenderMode      = MODE_STENCIL_TO_COVER;
     static RequestBufferCb g_RiveRequestBufferCb = 0;
     static DestroyBufferCb g_RiveDestroyBufferCb = 0;
-    static float           g_RiveContourQuality  = 0.0f;
-    static bool            g_RiveClippingSupport = true;
 
     static void getColorArrayFromUint(unsigned int colorIn, float* rgbaOut)
     {
@@ -417,16 +415,24 @@ namespace rive
     }
 
     /* Misc functions */
-    float getContourError()
+    float getContourError(HRenderer renderer)
     {
+        SharedRenderer* r = (SharedRenderer*) renderer;
         const float maxContourError = 5.0f;
         const float minContourError = 0.5f;
-        return minContourError * g_RiveContourQuality + maxContourError * (1.0f - g_RiveContourQuality);
+        return minContourError * r->m_ContourQuality + maxContourError * (1.0f - r->m_ContourQuality);
     }
 
-    bool getClippingSupport()
+    bool getClippingSupport(HRenderer renderer)
     {
-        return g_RiveClippingSupport;
+        SharedRenderer* r = (SharedRenderer*) renderer;
+        return r->m_IsClippingSupported;
+    }
+
+    void setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb)
+    {
+        g_RiveRequestBufferCb = rcb;
+        g_RiveDestroyBufferCb = dcb;
     }
 
     void setRenderMode(RenderMode mode)
@@ -440,32 +446,16 @@ namespace rive
         return pd->m_Data;
     }
 
-    void setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb)
+    void setContourQuality(HRenderer renderer, float quality)
     {
-        g_RiveRequestBufferCb = rcb;
-        g_RiveDestroyBufferCb = dcb;
+        SharedRenderer* r   = (SharedRenderer*) renderer;
+        r->m_ContourQuality = quality;
     }
 
-    void setContourQuality(float quality)
+    void setClippingSupport(HRenderer renderer, bool state)
     {
-        g_RiveContourQuality = quality;
-    }
-
-    void setClippingSupport(bool state)
-    {
-        g_RiveClippingSupport = state;
-    }
-
-    HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize)
-    {
-        assert(g_RiveRequestBufferCb);
-        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize);
-    }
-
-    void destroyBuffer(HBuffer buffer)
-    {
-        assert(g_RiveDestroyBufferCb);
-        g_RiveDestroyBufferCb(buffer);
+        SharedRenderer* r        = (SharedRenderer*) renderer;
+        r->m_IsClippingSupported = state;
     }
 
     RenderMode getRenderMode()
@@ -493,8 +483,18 @@ namespace rive
     {
         switch(g_RiveRenderMode)
         {
-            case MODE_TESSELLATION:     return new TessellationRenderer;
-            case MODE_STENCIL_TO_COVER: return new StencilToCoverRenderer;
+            case MODE_TESSELLATION:
+            {
+                TessellationRenderer* r = new TessellationRenderer;
+                r->m_RenderMode         = MODE_TESSELLATION;
+                return (HRenderer) r;
+            }
+            case MODE_STENCIL_TO_COVER:
+            {
+                StencilToCoverRenderer* r = new StencilToCoverRenderer;
+                r->m_RenderMode           = MODE_STENCIL_TO_COVER;
+                return (HRenderer) r;
+            }
             default:break;
         }
         return 0;
@@ -506,7 +506,7 @@ namespace rive
         delete renderer;
     }
 
-    void startFrame(HRenderer renderer)
+    void newFrame(HRenderer renderer)
     {
         SharedRenderer* r = (SharedRenderer*) renderer;
         r->m_AppliedClips.SetSize(0);
@@ -548,5 +548,15 @@ namespace rive
         }
 
         return buffers;
+    }
+
+    HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize)
+    {
+        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize);
+    }
+
+    void destroyBuffer(HBuffer buffer)
+    {
+        g_RiveDestroyBufferCb(buffer);
     }
 }

@@ -589,10 +589,10 @@ bool AppBootstrap(int argc, char const *argv[])
     ////////////////////////////////////////////////////
     // Rive setup
     ////////////////////////////////////////////////////
-    rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
-    //rive::setRenderMode(rive::MODE_TESSELLATION);
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
+    rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
     g_app.m_Renderer = rive::createRenderer();
+    rive::setClippingSupport(g_app.m_Renderer, true);
 
     for (int i = 1; i < argc; ++i)
     {
@@ -681,7 +681,7 @@ bool AppBootstrap(int argc, char const *argv[])
 
 void AppUpdateRive(float dt, uint32_t width, uint32_t height)
 {
-    rive::startFrame(g_app.m_Renderer);
+    rive::newFrame(g_app.m_Renderer);
     rive::Renderer* renderer = (rive::Renderer*) g_app.m_Renderer;
 
     float y = 0.0f;
@@ -1302,20 +1302,18 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
     if (rive::getRenderMode() != renderMode)
     {
         rive::setRenderMode(renderMode);
+
         for (int i = 0; i < App::MAX_ARTBOARD_CONTEXTS; ++i)
         {
             ReloadArtboardContext(&g_app.m_ArtboardContexts[i]);
         }
 
         rive::destroyRenderer(g_app.m_Renderer);
-
-        //delete g_app.m_Renderer;
         g_app.m_Renderer = rive::createRenderer();
     }
 
-    rive::setClippingSupport(g_app.m_DebugView == App::DEBUG_VIEW_NONE && clippingSupported);
-
-    rive::setContourQuality(contourQuality);
+    rive::setClippingSupport(g_app.m_Renderer, g_app.m_DebugView == App::DEBUG_VIEW_NONE && clippingSupported);
+    rive::setContourQuality(g_app.m_Renderer, contourQuality);
 }
 
 void AppShutdown()
@@ -1334,7 +1332,7 @@ void AppRun()
     float mouseLastX         = 0.0f;
     float mouseLastY         = 0.0f;
     float backgroundColor[3] = { 0.25f, 0.25f, 0.25f };
-    bool clippingSupported   = rive::getClippingSupport();
+    bool clippingSupported   = rive::getClippingSupport(g_app.m_Renderer);
 
     uint64_t timeFrame;
     uint64_t timeUpdateRive;

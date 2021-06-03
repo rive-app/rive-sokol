@@ -149,21 +149,20 @@ namespace rive
         #undef PEN_DOWN
     }
 
-    void TessellationRenderPath::updateContour()
+    void TessellationRenderPath::updateContour(float contourError)
     {
         if (m_Paths.Size() > 0)
         {
             for (int i=0; i < (int)m_Paths.Size(); i++)
             {
                 TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_Paths[i].m_Path;
-                sharedPath->updateContour();
+                sharedPath->updateContour(contourError);
             }
         }
 
-        float currentContourError = getContourError();
-        m_IsDirty                 = m_IsDirty      || currentContourError != m_ContourError;
-        m_IsShapeDirty            = m_IsShapeDirty || currentContourError != m_ContourError;
-        m_ContourError            = currentContourError;
+        m_IsDirty      = m_IsDirty      || contourError != m_ContourError;
+        m_IsShapeDirty = m_IsShapeDirty || contourError != m_ContourError;
+        m_ContourError = contourError;
 
         if (m_IsDirty)
         {
@@ -171,9 +170,9 @@ namespace rive
         }
     }
 
-    void TessellationRenderPath::updateTesselation()
+    void TessellationRenderPath::updateTesselation(float contourError)
     {
-        updateContour();
+        updateContour(contourError);
 
         if (!isShapeDirty())
         {
@@ -208,9 +207,9 @@ namespace rive
         tessDeleteTess(tess);
     }
 
-    void TessellationRenderPath::drawMesh(const Mat2D& transform)
+    void TessellationRenderPath::drawMesh(SharedRenderer* renderer, const Mat2D& transform)
     {
-        updateTesselation();
+        updateTesselation(getContourError(renderer));
     }
 
     /* Renderer impl */
@@ -254,7 +253,7 @@ namespace rive
                     .m_TransformWorld = pd.m_Transform,
                 });
 
-                ((TessellationRenderPath*) pd.m_Path)->drawMesh(m_Transform);
+                ((TessellationRenderPath*) pd.m_Path)->drawMesh(this, m_Transform);
             }
 
             pushDrawEvent({
@@ -286,7 +285,7 @@ namespace rive
             return;
         }
 
-        if (getClippingSupport() && m_IsClippingDirty)
+        if (m_IsClippingSupported && m_IsClippingDirty)
         {
             applyClipping();
         }
@@ -298,6 +297,6 @@ namespace rive
             .m_TransformWorld = m_Transform
         });
 
-        p->drawMesh(m_Transform);
+        p->drawMesh(this, m_Transform);
     }
 }

@@ -113,14 +113,17 @@ namespace rive
             uint8_t        m_ClipPathsCount;
         };
 
+        RenderMode                m_RenderMode;
         jc::Array<StackEntry>     m_ClipPathStack;
         jc::Array<PathDescriptor> m_ClipPaths;
         jc::Array<PathDescriptor> m_AppliedClips;
         jc::Array<PathDrawEvent>  m_DrawEvents;
         Mat2D                     m_Transform;
         SharedRenderPaint*        m_RenderPaint;
+        float                     m_ContourQuality;
         uint8_t                   m_IsClippingDirty     : 1;
         uint8_t                   m_IsClipping          : 1;
+        uint8_t                   m_IsClippingSupported : 1;
 
         void save()                            override;
         void restore()                         override;
@@ -189,14 +192,14 @@ namespace rive
         HBuffer m_VertexBuffer;
         HBuffer m_IndexBuffer;
 
-        void updateContour();
         void computeContour();
         void addContours(void* tess, const Mat2D& m);
-        void updateTesselation();
+        void updateContour(float contourError);
+        void updateTesselation(float contourError);
 
         TessellationRenderPath();
         ~TessellationRenderPath();
-        void drawMesh(const Mat2D& transform);
+        void drawMesh(SharedRenderer* renderer, const Mat2D& transform);
     };
 
     ////////////////////////////////////////////////////

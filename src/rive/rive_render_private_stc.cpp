@@ -117,7 +117,7 @@ namespace rive
             return;
         }
 
-        if (getClippingSupport() && m_IsClippingDirty)
+        if (m_IsClippingSupported && m_IsClippingDirty)
         {
             applyClipping();
         }
@@ -309,7 +309,7 @@ namespace rive
             return;
         }
 
-        float currentContourError = getContourError();
+        float currentContourError = getContourError((HRenderer) renderer);
         m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
         m_ContourError            = currentContourError;
 
@@ -346,7 +346,7 @@ namespace rive
             return;
         }
 
-        float currentContourError = getContourError();
+        float currentContourError = getContourError((HRenderer) renderer);
         m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
         m_ContourError            = currentContourError;
 

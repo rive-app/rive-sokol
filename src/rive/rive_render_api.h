@@ -14,6 +14,9 @@ namespace rive
         BUFFER_TYPE_INDEX_BUFFER  = 1,
     };
 
+    typedef HBuffer (*RequestBufferCb)(HBuffer buffer, BufferType type, void* data, unsigned int dataSize);
+    typedef void    (*DestroyBufferCb)(HBuffer buffer);
+
     enum FillType
     {
         FILL_TYPE_NONE   = 0,
@@ -53,6 +56,13 @@ namespace rive
         uint32_t          m_IsClipping       : 1;
     };
 
+    struct CreateRendererParams
+    {
+        RenderMode      m_RenderMode;
+        RequestBufferCb m_RequestBufferCb;
+        DestroyBufferCb m_DestroyBufferCb;
+    };
+
     struct DrawBuffers
     {
         union
@@ -83,20 +93,17 @@ namespace rive
         float        m_GradientLimits[4];
     };
 
-    typedef HBuffer (*RequestBufferCb)(HBuffer buffer, BufferType type, void* data, unsigned int dataSize);
-    typedef void    (*DestroyBufferCb)(HBuffer buffer);
-
     void                setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb);
     void                setRenderMode(RenderMode mode);
-    void                setContourQuality(float quality);
-    void                setClippingSupport(bool state);
-    bool                getClippingSupport();
-    float               getContourError();
+    void                setContourQuality(HRenderer renderer, float quality);
+    void                setClippingSupport(HRenderer renderer, bool state);
+    bool                getClippingSupport(HRenderer renderer);
+    float               getContourError(HRenderer renderer);
     const PaintData     getPaintData(HRenderPaint paint);
     RenderMode          getRenderMode();
     HRenderer           createRenderer();
     void                destroyRenderer(HRenderer renderer);
-    void                startFrame(HRenderer renderer);
+    void                newFrame(HRenderer renderer);
     uint32_t            getDrawEventCount(HRenderer renderer);
     const PathDrawEvent getDrawEvent(HRenderer renderer, uint32_t i);
     const DrawBuffers   getDrawBuffers(HRenderPath path);
