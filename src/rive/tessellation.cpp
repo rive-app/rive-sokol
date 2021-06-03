@@ -6,7 +6,9 @@
 
 #include <artboard.hpp>
 #include <renderer.hpp>
-#include "rive/shared.h"
+
+#include "rive/api.h"
+#include "rive/private.h"
 
 #define PRINT_COMMANDS 0
 
@@ -14,13 +16,14 @@ namespace rive
 {
 	/* TessellationRenderPath Impl */
     TessellationRenderPath::TessellationRenderPath()
-    : m_RenderData({})
-    { }
+    : m_VertexBuffer(0)
+    , m_IndexBuffer(0)
+    {}
 
     TessellationRenderPath::~TessellationRenderPath()
     {
-        destroyBuffer(m_RenderData.m_VertexBuffer);
-        destroyBuffer(m_RenderData.m_IndexBuffer);
+        destroyBuffer(m_VertexBuffer);
+        destroyBuffer(m_IndexBuffer);
     }
 
     void TessellationRenderPath::addContours(void* tess, const Mat2D& m)
@@ -194,8 +197,8 @@ namespace rive
             const TESSreal*  tessVertices      = tessGetVertices(tess);
             const TESSindex* tessElements      = tessGetElements(tess);
 
-            m_RenderData.m_VertexBuffer = requestBuffer(m_RenderData.m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize);
-            m_RenderData.m_IndexBuffer  = requestBuffer(m_RenderData.m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize);
+            m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize);
+            m_IndexBuffer  = requestBuffer(m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize);
         }
         else
         {
@@ -283,7 +286,7 @@ namespace rive
             return;
         }
 
-        if (m_IsClippingSupported && m_IsClippingDirty)
+        if (getClippingSupport() && m_IsClippingDirty)
         {
             applyClipping();
         }

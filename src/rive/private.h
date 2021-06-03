@@ -3,34 +3,12 @@
 
 namespace rive
 {
-    typedef uintptr_t HBuffer;
-
-    enum BufferType
-    {
-        BUFFER_TYPE_VERTEX_BUFFER = 0,
-        BUFFER_TYPE_INDEX_BUFFER  = 1,
-    };
-
     enum PathCommandType
     {
         TYPE_MOVE  = 0,
         TYPE_LINE  = 1,
         TYPE_CUBIC = 2,
         TYPE_CLOSE = 3,
-    };
-
-    enum RenderMode
-    {
-        MODE_TESSELLATION     = 0,
-        MODE_STENCIL_TO_COVER = 1,
-    };
-
-    enum FillType
-    {
-        FILL_TYPE_NONE   = 0,
-        FILL_TYPE_SOLID  = 1,
-        FILL_TYPE_LINEAR = 2,
-        FILL_TYPE_RADIAL = 3,
     };
 
     struct PathCommand
@@ -50,44 +28,12 @@ namespace rive
         Mat2D       m_Transform;
     };
 
-    enum PathDrawCallTag
-    {
-        TAG_NONE    = 0,
-        TAG_STENCIL = 1,
-        TAG_COVER   = 2,
-    };
-
     struct PathLimits
     {
         float    m_MinX;
         float    m_MinY;
         float    m_MaxX;
         float    m_MaxY;
-    };
-
-    enum PathDrawEventType
-    {
-        EVENT_NONE             = 0,
-        EVENT_DRAW             = 1,
-        EVENT_DRAW_STENCIL     = 2,
-        EVENT_DRAW_COVER       = 3,
-        EVENT_SET_PAINT        = 4,
-        EVENT_CLIPPING_BEGIN   = 5,
-        EVENT_CLIPPING_END     = 6,
-        EVENT_CLIPPING_DISABLE = 7,
-    };
-
-    struct PathDrawEvent
-    {
-        PathDrawEventType m_Type;
-        RenderPath*       m_Path;
-        RenderPaint*      m_Paint;
-        Mat2D             m_TransformWorld;
-        Mat2D             m_TransformLocal;
-        uint32_t          m_Idx              : 22;
-        uint32_t          m_AppliedClipCount : 8;
-        uint32_t          m_IsEvenOdd        : 1;
-        uint32_t          m_IsClipping       : 1;
     };
 
     struct GradientStop
@@ -107,16 +53,6 @@ namespace rive
         float                   m_EndY;
     };
 
-    struct SharedRenderPaintData
-    {
-        static const int MAX_STOPS = 16;
-        FillType     m_FillType;
-        unsigned int m_StopCount;
-        float        m_Stops[MAX_STOPS];
-        float        m_Colors[MAX_STOPS * 4];
-        float        m_GradientLimits[4];
-    };
-
     class SharedRenderPaint : public RenderPaint
     {
     public:
@@ -131,12 +67,11 @@ namespace rive
         void radialGradient(float sx, float sy, float ex, float ey) override;
         void addStop(unsigned int color, float stop)                override;
         void completeGradient()                                     override;
-        inline SharedRenderPaintData getData()   { return m_Data; }
         inline RenderPaintStyle      getStyle()  { return m_Style; }
         inline bool                  isVisible() { return m_IsVisible; }
-    private:
+
         SharedRenderPaintBuilder* m_Builder;
-        SharedRenderPaintData     m_Data;
+        PaintData                 m_Data;
         RenderPaintStyle          m_Style;
         bool                      m_IsVisible;
     };
@@ -144,16 +79,6 @@ namespace rive
     class SharedRenderPath : public RenderPath
     {
     public:
-        SharedRenderPath();
-        void            reset()                                                           override;
-        void            addRenderPath(RenderPath* path, const Mat2D& transform)           override;
-        void            fillRule(FillRule value)                                          override;
-        void            moveTo(float x, float y)                                          override;
-        void            lineTo(float x, float y)                                          override;
-        void            cubicTo(float ox, float oy, float ix, float iy, float x, float y) override;
-        virtual void    close()                                                           override;
-        inline FillRule getFillRule() { return m_FillRule; }
-    protected:
         // TODO: use a global buffer or something else
         static const uint32_t COUNTOUR_BUFFER_ELEMENT_COUNT = 512;
 
@@ -164,24 +89,22 @@ namespace rive
         FillRule                  m_FillRule;
         bool                      m_IsDirty;
         bool                      m_IsShapeDirty;
-        bool isShapeDirty();
+
+        SharedRenderPath();
+        void            reset()                                                           override;
+        void            addRenderPath(RenderPath* path, const Mat2D& transform)           override;
+        void            fillRule(FillRule value)                                          override;
+        void            moveTo(float x, float y)                                          override;
+        void            lineTo(float x, float y)                                          override;
+        void            cubicTo(float ox, float oy, float ix, float iy, float x, float y) override;
+        virtual void    close()                                                           override;
+        inline FillRule getFillRule() { return m_FillRule; }
+        bool            isShapeDirty();
     };
 
     class SharedRenderer : public Renderer
     {
     public:
-        SharedRenderer();
-        void save()                            override;
-        void restore()                         override;
-        void transform(const Mat2D& transform) override;
-        void clipPath(RenderPath* path)        override;
-        void startFrame();
-
-        void                       pushDrawEvent(const PathDrawEvent& evt);
-        inline uint32_t            getDrawEventCount()            { return m_DrawEvents.Size(); }
-        inline const PathDrawEvent getDrawEvent(uint32_t index)   { return m_DrawEvents[index]; }
-        inline void                setClippingSupport(bool state) { m_IsClippingSupported = state; };
-    protected:
         static const int STACK_ENTRY_MAX_CLIP_PATHS = 16;
         struct StackEntry
         {
@@ -196,10 +119,16 @@ namespace rive
         jc::Array<PathDrawEvent>  m_DrawEvents;
         Mat2D                     m_Transform;
         SharedRenderPaint*        m_RenderPaint;
-        uint8_t                   m_IsClippingSupported : 1;
         uint8_t                   m_IsClippingDirty     : 1;
         uint8_t                   m_IsClipping          : 1;
 
+        void save()                            override;
+        void restore()                         override;
+        void transform(const Mat2D& transform) override;
+        void clipPath(RenderPath* path)        override;
+        void startFrame();
+
+        void pushDrawEvent(const PathDrawEvent& evt);
         void setPaint(SharedRenderPaint* rp);
     };
 
@@ -210,11 +139,11 @@ namespace rive
     class StencilToCoverRenderer : public SharedRenderer
     {
     public:
+        StencilToCoverRenderPath* m_FullscreenPath;
+
         StencilToCoverRenderer();
         ~StencilToCoverRenderer();
         void drawPath(RenderPath* path, RenderPaint* paint) override;
-    private:
-        StencilToCoverRenderPath* m_FullscreenPath;
         void applyClipping();
         void applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform);
     };
@@ -222,27 +151,20 @@ namespace rive
     class StencilToCoverRenderPath : public SharedRenderPath
     {
     public:
-        struct Buffers
-        {
-            HBuffer m_ContourVertexBuffer;
-            HBuffer m_ContourIndexBuffer;
-            HBuffer m_CoverVertexBuffer;
-            HBuffer m_CoverIndexBuffer;
-        };
-
-        StencilToCoverRenderPath();
-        ~StencilToCoverRenderPath();
-        inline const Buffers getDrawBuffers() { return m_RenderData; }
-    private:
         // TODO: use a global buffer or something else
         static const uint32_t COUNTOUR_BUFFER_ELEMENT_COUNT = 128 * 3;
         uint32_t          m_ContourIndexData[COUNTOUR_BUFFER_ELEMENT_COUNT];
         uint32_t          m_ContourIndexCount;
-        Buffers           m_RenderData;
+        HBuffer           m_ContourVertexBuffer;
+        HBuffer           m_ContourIndexBuffer;
+        HBuffer           m_CoverVertexBuffer;
+        HBuffer           m_CoverIndexBuffer;
         float             m_ContourError;
         PathLimits        m_Limits;
 
-        void drawMesh(const Mat2D& transform);
+        StencilToCoverRenderPath();
+        ~StencilToCoverRenderPath();
+
         void stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping);
         void cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping);
         void computeContour();
@@ -257,30 +179,24 @@ namespace rive
     {
     public:
         void drawPath(RenderPath* path, RenderPaint* paint) override;
-    private:
         void applyClipping();
     };
 
     class TessellationRenderPath : public SharedRenderPath
     {
     public:
-        struct Buffers
-        {
-            HBuffer m_VertexBuffer;
-            HBuffer m_IndexBuffer;
-        };
-
-        TessellationRenderPath();
-        ~TessellationRenderPath();
-        void                 drawMesh(const Mat2D& transform);
-        inline const Buffers getDrawBuffers() { return m_RenderData; }
-    private:
         float   m_ContourError;
-        Buffers m_RenderData;
+        HBuffer m_VertexBuffer;
+        HBuffer m_IndexBuffer;
+
         void updateContour();
         void computeContour();
         void addContours(void* tess, const Mat2D& m);
         void updateTesselation();
+
+        TessellationRenderPath();
+        ~TessellationRenderPath();
+        void drawMesh(const Mat2D& transform);
     };
 
     ////////////////////////////////////////////////////
@@ -298,18 +214,8 @@ namespace rive
                       uint32_t& verticesCount,
                       PathLimits* pathLimits);
 
-    typedef HBuffer (*RequestBufferCb)(HBuffer buffer, BufferType type, void* data, unsigned int dataSize);
-    typedef void    (*DestroyBufferCb)(HBuffer buffer);
-
-    Artboard*  loadArtboardFromData(uint8_t* data, size_t dataLength);
-    void       setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb);
-    void       setRenderMode(RenderMode mode);
-    void       setContourQuality(float quality);
-    float      getContourError();
-    RenderMode getRenderMode();
-    Renderer*  makeRenderer();
-    HBuffer    requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize);
-    void       destroyBuffer(HBuffer buffer);
+    HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize);
+    void    destroyBuffer(HBuffer buffer);
 }
 
 #endif

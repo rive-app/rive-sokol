@@ -16,8 +16,9 @@
 
 #include <animation/linear_animation_instance.hpp>
 #include <artboard.hpp>
+#include <file.hpp>
 
-#include "rive/shared.h"
+#include "rive/api.h"
 #include "rive/shader.glsl.h"
 
 #define VIEWER_WINDOW_NAME "Rive Sokol Viewer"
@@ -85,7 +86,7 @@ static struct App
     GLFWwindow*                m_Window;
     // Rive
     ArtboardContext            m_ArtboardContexts[MAX_ARTBOARD_CONTEXTS];
-    rive::Renderer*            m_Renderer;
+    rive::HRenderer            m_Renderer;
     // Sokol
     sg_shader                  m_MainShader;
     sg_pipeline                m_TessellationIsClippingPipelines[256];
@@ -141,13 +142,27 @@ static bool LoadFileFromPath(const char* path, uint8_t** bytesOut, size_t* bytes
     return true;
 }
 
+rive::Artboard* LoadArtboardFromData(uint8_t* data, size_t dataLength)
+{
+    rive::File* file    = 0;
+    rive::BinaryReader reader = rive::BinaryReader(data, dataLength);
+    rive::ImportResult result = rive::File::import(reader, &file);
+
+    if (result != rive::ImportResult::success)
+    {
+        return 0;
+    }
+
+    return file->artboard();
+}
+
 static void UpdateArtboardCloneCount(App::ArtboardContext& ctx)
 {
     if (ctx.m_CloneCount != ctx.m_Artboards.Size())
     {
         if (ctx.m_CloneCount > ctx.m_Artboards.Size())
         {
-            rive::Artboard* artboard = rive::loadArtboardFromData(ctx.m_Data, ctx.m_DataSize);
+            rive::Artboard* artboard = LoadArtboardFromData(ctx.m_Data, ctx.m_DataSize);
             App::ArtboardData data = {
                 .m_Artboard          = artboard,
                 .m_AnimationInstance = 0
@@ -204,7 +219,7 @@ static void AddArtboardFromPath(const char* path)
     size_t bytesLength = 0;
     if (LoadFileFromPath(path, &bytes, &bytesLength))
     {
-        rive::Artboard* artboard = rive::loadArtboardFromData(bytes, bytesLength);
+        rive::Artboard* artboard = LoadArtboardFromData(bytes, bytesLength);
         if (artboard)
         {
             assert(ctx->m_Data == 0);
@@ -239,7 +254,7 @@ static void ReloadArtboardContext(App::ArtboardContext* ctx)
         if (data.m_Artboard)
         {
             delete data.m_Artboard;
-            data.m_Artboard = rive::loadArtboardFromData(ctx->m_Data, ctx->m_DataSize);
+            data.m_Artboard = LoadArtboardFromData(ctx->m_Data, ctx->m_DataSize);
         }
 
         if (data.m_AnimationInstance)
@@ -577,7 +592,7 @@ bool AppBootstrap(int argc, char const *argv[])
     rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
     //rive::setRenderMode(rive::MODE_TESSELLATION);
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
-    g_app.m_Renderer = rive::makeRenderer();
+    g_app.m_Renderer = rive::createRenderer();
 
     for (int i = 1; i < argc; ++i)
     {
@@ -666,9 +681,13 @@ bool AppBootstrap(int argc, char const *argv[])
 
 void AppUpdateRive(float dt, uint32_t width, uint32_t height)
 {
+    /*
     rive::SharedRenderer* renderer = (rive::SharedRenderer*) g_app.m_Renderer;
-
     renderer->startFrame();
+    */
+
+    rive::startFrame(g_app.m_Renderer);
+    rive::Renderer* renderer = (rive::Renderer*) g_app.m_Renderer;
 
     float y = 0.0f;
     float x = 0.0f;
@@ -709,9 +728,10 @@ void AppUpdateRive(float dt, uint32_t width, uint32_t height)
     }
 }
 
-static void FillPaintData(rive::RenderPaint* paint, fs_paint_t& uniform)
+static void FillPaintData(rive::HRenderPaint paint, fs_paint_t& uniform)
 {
-    const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) paint)->getData();
+    const rive::PaintData paintData = rive::getPaintData(paint);
+
     //  Note: Have to use vectors for the stops here aswell, doesn't work otherwise (sokol issue?)
     for (int i = 0; i < paintData.m_StopCount; ++i)
     {
@@ -827,7 +847,7 @@ struct AppTessellationRenderer
     fs_paint_t         m_FsUniforms;
     sg_range           m_VsUniformsRange;
     sg_range           m_FsUniformsRange;
-    rive::RenderPaint* m_Paint;
+    rive::HRenderPaint m_Paint;
     uint32_t           m_Width              : 16;
     uint32_t           m_Height             : 16;
     uint32_t           m_AppliedClipCount   : 8;
@@ -837,11 +857,10 @@ struct AppTessellationRenderer
 
     static void Frame(uint32_t width, uint32_t height)
     {
-        rive::TessellationRenderer* riveRenderer = (rive::TessellationRenderer*) g_app.m_Renderer;
         AppTessellationRenderer obj(width, height);
-        for (int i = 0; i < riveRenderer->getDrawEventCount(); ++i)
+        for (int i = 0; i < rive::getDrawEventCount(g_app.m_Renderer); ++i)
         {
-            const rive::PathDrawEvent evt = riveRenderer->getDrawEvent(i);
+            const rive::PathDrawEvent evt = rive::getDrawEvent(g_app.m_Renderer, i);
             switch(evt.m_Type)
             {
                 case rive::EVENT_SET_PAINT:
@@ -962,19 +981,16 @@ struct AppTessellationRenderer
 
     void DrawPass(const rive::PathDrawEvent& evt)
     {
-        rive::RenderPath* path   = evt.m_Path;
-        rive::Mat2D transform    = evt.m_TransformWorld;
-        rive::TessellationRenderPath::Buffers buffers = ((rive::TessellationRenderPath*) path)->getDrawBuffers();
-
-        App::GpuBuffer* vertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
-        App::GpuBuffer* indexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(evt.m_Path);
+        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_Tessellation.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_Tessellation.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
             return;
         }
 
-        Mat2DToMat4(transform, (float (*)[4]) m_VsUniforms.transform);
+        Mat2DToMat4(evt.m_TransformWorld, (float (*)[4]) m_VsUniforms.transform);
         int drawLength = (indexBuffer->m_DataSize / sizeof(int)) * 3;
 
         sg_bindings& bindings      = g_app.m_Bindings;
@@ -1009,16 +1025,17 @@ struct AppTessellationRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        rive::TessellationRenderPath::Buffers buffers = ((rive::TessellationRenderPath*) evt.m_Path)->getDrawBuffers();
-        App::GpuBuffer* vertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
-        App::GpuBuffer* indexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(evt.m_Path);
+        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_Tessellation.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_Tessellation.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
             return;
         }
 
-        const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) m_Paint)->getData();
+        const rive::PaintData paintData = getPaintData(m_Paint);
+
         fs_contour_t fsContourParams                = {};
         memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
         Mat2DToMat4(evt.m_TransformWorld, (float (*)[4]) m_VsUniforms.transform);
@@ -1037,7 +1054,7 @@ struct AppSTCRenderer
     fs_paint_t         m_FsUniforms;
     sg_range           m_VsUniformsRange;
     sg_range           m_FsUniformsRange;
-    rive::RenderPaint* m_Paint;
+    rive::HRenderPaint m_Paint;
     mat4x4             m_CameraMtx;
     uint32_t           m_Width              : 16;
     uint32_t           m_Height             : 16;
@@ -1046,12 +1063,10 @@ struct AppSTCRenderer
 
     static void Frame(uint32_t width, uint32_t height)
     {
-        rive::StencilToCoverRenderer* riveRenderer = (rive::StencilToCoverRenderer*) g_app.m_Renderer;
         AppSTCRenderer obj(width, height);
-
-        for (int i = 0; i < riveRenderer->getDrawEventCount(); ++i)
+        for (int i = 0; i < rive::getDrawEventCount(g_app.m_Renderer); ++i)
         {
-            const rive::PathDrawEvent evt = riveRenderer->getDrawEvent(i);
+            const rive::PathDrawEvent evt = rive::getDrawEvent(g_app.m_Renderer, i);
             switch(evt.m_Type)
             {
                 case rive::EVENT_SET_PAINT:
@@ -1131,9 +1146,9 @@ struct AppSTCRenderer
 
     void StencilPass(const rive::PathDrawEvent& evt)
     {
-        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) evt.m_Path)->getDrawBuffers();
-        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
-        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(evt.m_Path);
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourVertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourIndexBuffer;
 
         if (!IS_BUFFER_VALID(contourVertexBuffer) ||
             !IS_BUFFER_VALID(contourIndexBuffer))
@@ -1180,9 +1195,9 @@ struct AppSTCRenderer
 
     void CoverPass(const rive::PathDrawEvent& evt)
     {
-        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) evt.m_Path)->getDrawBuffers();
-        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_CoverVertexBuffer;
-        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_CoverIndexBuffer;
+        const rive::DrawBuffers buffers   = rive::getDrawBuffers(evt.m_Path);
+        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_CoverVertexBuffer;
+        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_CoverIndexBuffer;
 
         if (!IS_BUFFER_VALID(coverVertexBuffer) ||
             !IS_BUFFER_VALID(coverIndexBuffer))
@@ -1245,12 +1260,13 @@ struct AppSTCRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        rive::StencilToCoverRenderPath::Buffers buffers = ((rive::StencilToCoverRenderPath*) evt.m_Path)->getDrawBuffers();
-        App::GpuBuffer* contourVertexBuffer             = (App::GpuBuffer*) buffers.m_ContourVertexBuffer;
-        App::GpuBuffer* contourIndexBuffer              = (App::GpuBuffer*) buffers.m_ContourIndexBuffer;
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(evt.m_Path);
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourVertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourIndexBuffer;
         if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
         {
-            const rive::SharedRenderPaintData paintData = ((rive::SharedRenderPaint*) m_Paint)->getData();
+            const rive::PaintData paintData = rive::getPaintData(m_Paint);
+
             fs_contour_t fsContourParams = {};
             memcpy(fsContourParams.color, paintData.m_Colors, sizeof(float) * 4);
 
@@ -1295,12 +1311,14 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
         {
             ReloadArtboardContext(&g_app.m_ArtboardContexts[i]);
         }
-        delete g_app.m_Renderer;
-        g_app.m_Renderer = rive::makeRenderer();
+
+        rive::destroyRenderer(g_app.m_Renderer);
+
+        //delete g_app.m_Renderer;
+        g_app.m_Renderer = rive::createRenderer();
     }
 
-    rive::SharedRenderer* renderer = ((rive::SharedRenderer*) g_app.m_Renderer);
-    renderer->setClippingSupport(g_app.m_DebugView == App::DEBUG_VIEW_NONE && clippingSupported);
+    rive::setClippingSupport(g_app.m_DebugView == App::DEBUG_VIEW_NONE && clippingSupported);
 
     rive::setContourQuality(contourQuality);
 }
@@ -1313,27 +1331,27 @@ void AppShutdown()
 
 void AppRun()
 {
-    int window_width, window_height;
-    float dt             = 0.0f;
-    float contourQuality = 0.8888888888888889f;
-    int renderModeChoice = (int) rive::getRenderMode();
+    int windowWidth          = 0;
+    int windowHeight         = 0;
+    float dt                 = 0.0f;
+    float contourQuality     = 0.8888888888888889f;
+    int renderModeChoice     = (int) rive::getRenderMode();
+    float mouseLastX         = 0.0f;
+    float mouseLastY         = 0.0f;
+    float backgroundColor[3] = { 0.25f, 0.25f, 0.25f };
+    bool clippingSupported   = rive::getClippingSupport();
 
     uint64_t timeFrame;
     uint64_t timeUpdateRive;
     uint64_t timeRenderRive;
 
-    float mouseLastX         = 0.0f;
-    float mouseLastY         = 0.0f;
-    float backgroundColor[3] = { 0.25f, 0.25f, 0.25f };
-    bool clippingSupported   = true;
-
     while (!glfwWindowShouldClose(g_app.m_Window))
     {
-        glfwGetFramebufferSize(g_app.m_Window, &window_width, &window_height);
+        glfwGetFramebufferSize(g_app.m_Window, &windowWidth, &windowHeight);
 
         dt             = (float) stm_sec(stm_laptime(&timeFrame));
         ImGuiIO& io    = ImGui::GetIO();
-        io.DisplaySize = ImVec2(float(window_width), float(window_height));
+        io.DisplaySize = ImVec2(float(windowWidth), float(windowHeight));
         io.DeltaTime   = dt;
 
         ImGui::NewFrame();
@@ -1364,6 +1382,7 @@ void AppRun()
         ImGui::Separator();
         ImGui::Spacing();
 
+        bool artboardLoaded = false;
         for (int i = 0; i < App::MAX_ARTBOARD_CONTEXTS; ++i)
         {
             App::ArtboardContext& ctx = g_app.m_ArtboardContexts[i];
@@ -1384,11 +1403,19 @@ void AppRun()
             ImGui::SameLine();
             ImGui::SliderInt(cloneCountLabel, &ctx.m_CloneCount, 1, 10);
             UpdateArtboardCloneCount(ctx);
+
+            artboardLoaded = true;
+        }
+
+        if (!artboardLoaded)
+        {
+            ImGui::Text("Drag and drop .riv file(s) to preview them.");
         }
 
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
+
         ImGui::Text("App  Frame  Time: %.3f ms", 1000.0f / ImGui::GetIO().Framerate);
         ImGui::Text("Rive Update Time: %.3f ms", (float) stm_ms(timeUpdateRive));
         ImGui::Text("Rive Render Time: %.3f ms", (float) stm_ms(timeRenderRive));
@@ -1411,13 +1438,13 @@ void AppRun()
         AppConfigure((rive::RenderMode) renderModeChoice, contourQuality, backgroundColor, clippingSupported);
 
         timeUpdateRive = stm_now();
-        AppUpdateRive(dt, window_width, window_height);
+        AppUpdateRive(dt, windowWidth, windowHeight);
         timeUpdateRive = stm_since(timeUpdateRive);
 
-        sg_begin_default_pass(&g_app.m_PassAction, window_width, window_height);
+        sg_begin_default_pass(&g_app.m_PassAction, windowWidth, windowHeight);
 
         timeRenderRive = stm_now();
-        AppRenderRive(window_width, window_height);
+        AppRenderRive(windowWidth, windowHeight);
         timeRenderRive = stm_since(timeRenderRive);
 
         ImGui::Render();

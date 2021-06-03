@@ -3,7 +3,8 @@
 
 #include <renderer.hpp>
 #include <artboard.hpp>
-#include "rive/shared.h"
+#include "rive/api.h"
+#include "rive/private.h"
 
 namespace rive
 {
@@ -115,7 +116,7 @@ namespace rive
             return;
         }
 
-        if (m_IsClippingSupported && m_IsClippingDirty)
+        if (getClippingSupport() && m_IsClippingDirty)
         {
             applyClipping();
         }
@@ -128,22 +129,20 @@ namespace rive
 
     /* StencilToCoverRenderPath impl */
     StencilToCoverRenderPath::StencilToCoverRenderPath()
-    : m_RenderData({})
+    : m_ContourIndexCount(0)
+    , m_ContourVertexBuffer(0)
+    , m_ContourIndexBuffer(0)
+    , m_CoverVertexBuffer(0)
+    , m_CoverIndexBuffer(0)
     , m_ContourError(0.0f)
-    {
-    }
+    {}
 
     StencilToCoverRenderPath::~StencilToCoverRenderPath()
     {
-        destroyBuffer(m_RenderData.m_ContourVertexBuffer);
-        destroyBuffer(m_RenderData.m_ContourIndexBuffer);
-        destroyBuffer(m_RenderData.m_CoverVertexBuffer);
-        destroyBuffer(m_RenderData.m_CoverIndexBuffer);
-    }
-
-    void StencilToCoverRenderPath::drawMesh(const Mat2D& transform)
-    {
-
+        destroyBuffer(m_ContourVertexBuffer);
+        destroyBuffer(m_ContourIndexBuffer);
+        destroyBuffer(m_CoverVertexBuffer);
+        destroyBuffer(m_CoverIndexBuffer);
     }
 
     void StencilToCoverRenderPath::computeContour()
@@ -286,10 +285,10 @@ namespace rive
             2, 3, 0,
         };
 
-        m_RenderData.m_ContourVertexBuffer = requestBuffer(m_RenderData.m_ContourVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, m_ContourVertexData, m_ContourVertexCount * sizeof(float) * 2);
-        m_RenderData.m_ContourIndexBuffer  = requestBuffer(m_RenderData.m_ContourIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, m_ContourIndexData, m_ContourIndexCount * sizeof(int));
-        m_RenderData.m_CoverVertexBuffer   = requestBuffer(m_RenderData.m_CoverVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertexData, sizeof(coverVertexData));
-        m_RenderData.m_CoverIndexBuffer    = requestBuffer(m_RenderData.m_CoverIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) coverIndexData, sizeof(coverIndexData));
+        m_ContourVertexBuffer = requestBuffer(m_ContourVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, m_ContourVertexData, m_ContourVertexCount * sizeof(float) * 2);
+        m_ContourIndexBuffer  = requestBuffer(m_ContourIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, m_ContourIndexData, m_ContourIndexCount * sizeof(int));
+        m_CoverVertexBuffer   = requestBuffer(m_CoverVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertexData, sizeof(coverVertexData));
+        m_CoverIndexBuffer    = requestBuffer(m_CoverIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) coverIndexData, sizeof(coverIndexData));
     }
 
     void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping)
