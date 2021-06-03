@@ -131,7 +131,7 @@ namespace rive
         void clipPath(RenderPath* path)        override;
         void startFrame();
 
-        void pushDrawEvent(const PathDrawEvent& evt);
+        void pushDrawEvent(PathDrawEvent evt);
         void setPaint(SharedRenderPaint* rp);
     };
 

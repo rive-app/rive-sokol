@@ -393,7 +393,7 @@ namespace rive
         }
     }
 
-    void SharedRenderer::pushDrawEvent(const PathDrawEvent& event)
+    void SharedRenderer::pushDrawEvent(PathDrawEvent event)
     {
         if (m_DrawEvents.Full())
         {

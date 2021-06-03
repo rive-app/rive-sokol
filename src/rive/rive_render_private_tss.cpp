@@ -247,7 +247,7 @@ namespace rive
             for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pd = m_ClipPaths[i];
-                SharedRenderer::pushDrawEvent({
+                pushDrawEvent({
                     .m_Type           = EVENT_DRAW,
                     .m_Path           = pd.m_Path,
                     .m_TransformWorld = pd.m_Transform,
@@ -256,7 +256,7 @@ namespace rive
                 ((TessellationRenderPath*) pd.m_Path)->drawMesh(this, m_Transform);
             }
 
-            SharedRenderer::pushDrawEvent({
+            pushDrawEvent({
                 .m_Type             = EVENT_CLIPPING_END,
                 .m_AppliedClipCount = (uint32_t) m_ClipPaths.Size(),
             });
@@ -271,7 +271,7 @@ namespace rive
         }
         else
         {
-            SharedRenderer::pushDrawEvent({ .m_Type = EVENT_CLIPPING_DISABLE });
+            pushDrawEvent({ .m_Type = EVENT_CLIPPING_DISABLE });
         }
     }
 
@@ -291,7 +291,7 @@ namespace rive
         }
 
         setPaint(rp);
-        SharedRenderer::pushDrawEvent({
+        pushDrawEvent({
             .m_Type           = EVENT_DRAW,
             .m_Path           = path,
             .m_TransformWorld = m_Transform
