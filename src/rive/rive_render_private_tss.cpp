@@ -6,7 +6,9 @@
 
 #include <artboard.hpp>
 #include <renderer.hpp>
-#include "rive/shared.h"
+
+#include "rive/rive_render_api.h"
+#include "rive/rive_render_private.h"
 
 #define PRINT_COMMANDS 0
 
@@ -14,13 +16,14 @@ namespace rive
 {
 	/* TessellationRenderPath Impl */
     TessellationRenderPath::TessellationRenderPath()
-    : m_RenderData({})
-    { }
+    : m_VertexBuffer(0)
+    , m_IndexBuffer(0)
+    {}
 
     TessellationRenderPath::~TessellationRenderPath()
     {
-        destroyBuffer(m_RenderData.m_VertexBuffer);
-        destroyBuffer(m_RenderData.m_IndexBuffer);
+        destroyBuffer(m_VertexBuffer);
+        destroyBuffer(m_IndexBuffer);
     }
 
     void TessellationRenderPath::addContours(void* tess, const Mat2D& m)
@@ -146,21 +149,20 @@ namespace rive
         #undef PEN_DOWN
     }
 
-    void TessellationRenderPath::updateContour()
+    void TessellationRenderPath::updateContour(float contourError)
     {
         if (m_Paths.Size() > 0)
         {
             for (int i=0; i < (int)m_Paths.Size(); i++)
             {
                 TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_Paths[i].m_Path;
-                sharedPath->updateContour();
+                sharedPath->updateContour(contourError);
             }
         }
 
-        float currentContourError = getContourError();
-        m_IsDirty                 = m_IsDirty      || currentContourError != m_ContourError;
-        m_IsShapeDirty            = m_IsShapeDirty || currentContourError != m_ContourError;
-        m_ContourError            = currentContourError;
+        m_IsDirty      = m_IsDirty      || contourError != m_ContourError;
+        m_IsShapeDirty = m_IsShapeDirty || contourError != m_ContourError;
+        m_ContourError = contourError;
 
         if (m_IsDirty)
         {
@@ -168,9 +170,9 @@ namespace rive
         }
     }
 
-    void TessellationRenderPath::updateTesselation()
+    void TessellationRenderPath::updateTesselation(float contourError)
     {
-        updateContour();
+        updateContour(contourError);
 
         if (!isShapeDirty())
         {
@@ -194,8 +196,8 @@ namespace rive
             const TESSreal*  tessVertices      = tessGetVertices(tess);
             const TESSindex* tessElements      = tessGetElements(tess);
 
-            m_RenderData.m_VertexBuffer = requestBuffer(m_RenderData.m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize);
-            m_RenderData.m_IndexBuffer  = requestBuffer(m_RenderData.m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize);
+            m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize);
+            m_IndexBuffer  = requestBuffer(m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize);
         }
         else
         {
@@ -205,9 +207,9 @@ namespace rive
         tessDeleteTess(tess);
     }
 
-    void TessellationRenderPath::drawMesh(const Mat2D& transform)
+    void TessellationRenderPath::drawMesh(SharedRenderer* renderer, const Mat2D& transform)
     {
-        updateTesselation();
+        updateTesselation(getContourError(renderer));
     }
 
     /* Renderer impl */
@@ -240,24 +242,29 @@ namespace rive
 
         if (m_ClipPaths.Size() > 0)
         {
-            pushDrawEvent({ .m_Type = EVENT_CLIPPING_BEGIN });
+            PathDrawEvent evtClippingBegin = { .m_Type = EVENT_CLIPPING_BEGIN };
+            pushDrawEvent(evtClippingBegin);
 
             for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pd = m_ClipPaths[i];
-                pushDrawEvent({
+
+                PathDrawEvent evtDraw = {
                     .m_Type           = EVENT_DRAW,
                     .m_Path           = pd.m_Path,
                     .m_TransformWorld = pd.m_Transform,
-                });
+                };
 
-                ((TessellationRenderPath*) pd.m_Path)->drawMesh(m_Transform);
+                pushDrawEvent(evtDraw);
+
+                ((TessellationRenderPath*) pd.m_Path)->drawMesh(this, m_Transform);
             }
 
-            pushDrawEvent({
+            PathDrawEvent evtClippingEnd = {
                 .m_Type             = EVENT_CLIPPING_END,
                 .m_AppliedClipCount = (uint32_t) m_ClipPaths.Size(),
-            });
+            };
+            pushDrawEvent(evtClippingEnd);
 
             m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
             m_AppliedClips.SetSize(0);
@@ -269,7 +276,8 @@ namespace rive
         }
         else
         {
-            pushDrawEvent({ .m_Type = EVENT_CLIPPING_DISABLE });
+            PathDrawEvent evtClippingDisable = { .m_Type = EVENT_CLIPPING_DISABLE };
+            pushDrawEvent(evtClippingDisable);
         }
     }
 
@@ -289,12 +297,14 @@ namespace rive
         }
 
         setPaint(rp);
-        pushDrawEvent({
+
+        PathDrawEvent evt = {
             .m_Type           = EVENT_DRAW,
             .m_Path           = path,
             .m_TransformWorld = m_Transform
-        });
+        };
+        pushDrawEvent(evt);
 
-        p->drawMesh(m_Transform);
+        p->drawMesh(this, m_Transform);
     }
 }

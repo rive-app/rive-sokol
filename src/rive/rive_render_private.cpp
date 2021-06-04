@@ -1,18 +1,17 @@
 #include <float.h>
 #include <string.h>
 
-#include <file.hpp>
-#include <artboard.hpp>
-
 #include <jc/array.h>
-#include "rive/shared.h"
+
+#include <artboard.hpp>
+#include "rive/rive_render_api.h"
+#include "rive/rive_render_private.h"
 
 namespace rive
 {
     static RenderMode      g_RiveRenderMode      = MODE_STENCIL_TO_COVER;
     static RequestBufferCb g_RiveRequestBufferCb = 0;
     static DestroyBufferCb g_RiveDestroyBufferCb = 0;
-    static float           g_RiveContourQuality  = 0.0f;
 
     static void getColorArrayFromUint(unsigned int colorIn, float* rgbaOut)
     {
@@ -194,8 +193,8 @@ namespace rive
         m_Data.m_GradientLimits[3] = m_Builder->m_EndY;
 
         m_IsVisible = false;
-        assert(m_Data.m_StopCount < SharedRenderPaintData::MAX_STOPS);
-        for (int i = 0; i < m_Builder->m_Stops.Size(); ++i)
+        assert(m_Data.m_StopCount < PaintData::MAX_STOPS);
+        for (int i = 0; i < (int) m_Builder->m_Stops.Size(); ++i)
         {
             const GradientStop& stop = m_Builder->m_Stops[i];
             getColorArrayFromUint(stop.m_Color, &m_Data.m_Colors[i * 4]);
@@ -346,10 +345,6 @@ namespace rive
     }
 
     /* Shared Renderer */
-    SharedRenderer::SharedRenderer()
-    : m_IsClippingSupported(true)
-    {}
-
     void SharedRenderer::clipPath(RenderPath* path)
     {
         if (m_ClipPaths.Full())
@@ -359,15 +354,6 @@ namespace rive
 
         m_ClipPaths.Push({.m_Path = path, .m_Transform = m_Transform});
         m_IsClippingDirty = true;
-    }
-
-    void SharedRenderer::startFrame()
-    {
-        m_AppliedClips.SetSize(0);
-        m_DrawEvents.SetSize(0);
-        m_IsClippingDirty = false;
-        m_RenderPaint = 0;
-        m_IsClipping = false;
     }
 
     void SharedRenderer::transform(const Mat2D& transform)
@@ -407,7 +393,7 @@ namespace rive
         }
     }
 
-    void SharedRenderer::pushDrawEvent(const PathDrawEvent& event)
+    void SharedRenderer::pushDrawEvent(PathDrawEvent event)
     {
         if (m_DrawEvents.Full())
         {
@@ -421,24 +407,29 @@ namespace rive
         if (m_RenderPaint != rp)
         {
             m_RenderPaint = rp;
-            pushDrawEvent({
+
+            PathDrawEvent evt = {
                 .m_Type  = EVENT_SET_PAINT,
                 .m_Paint = rp,
-            });
+            };
+
+            pushDrawEvent(evt);
         }
     }
 
     /* Misc functions */
-    float getContourError()
+    float getContourError(HRenderer renderer)
     {
+        SharedRenderer* r = (SharedRenderer*) renderer;
         const float maxContourError = 5.0f;
         const float minContourError = 0.5f;
-        return minContourError * g_RiveContourQuality + maxContourError * (1.0f - g_RiveContourQuality);
+        return minContourError * r->m_ContourQuality + maxContourError * (1.0f - r->m_ContourQuality);
     }
 
-    void setRenderMode(RenderMode mode)
+    bool getClippingSupport(HRenderer renderer)
     {
-        g_RiveRenderMode = mode;
+        SharedRenderer* r = (SharedRenderer*) renderer;
+        return r->m_IsClippingSupported;
     }
 
     void setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb)
@@ -447,21 +438,27 @@ namespace rive
         g_RiveDestroyBufferCb = dcb;
     }
 
-    void setContourQuality(float quality)
+    void setRenderMode(RenderMode mode)
     {
-        g_RiveContourQuality = quality;
+        g_RiveRenderMode = mode;
     }
 
-    HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize)
+    const PaintData getPaintData(HRenderPaint paint)
     {
-        assert(g_RiveRequestBufferCb);
-        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize);
+        SharedRenderPaint* pd = (SharedRenderPaint*) paint;
+        return pd->m_Data;
     }
 
-    void destroyBuffer(HBuffer buffer)
+    void setContourQuality(HRenderer renderer, float quality)
     {
-        assert(g_RiveDestroyBufferCb);
-        g_RiveDestroyBufferCb(buffer);
+        SharedRenderer* r   = (SharedRenderer*) renderer;
+        r->m_ContourQuality = quality;
+    }
+
+    void setClippingSupport(HRenderer renderer, bool state)
+    {
+        SharedRenderer* r        = (SharedRenderer*) renderer;
+        r->m_IsClippingSupported = state;
     }
 
     RenderMode getRenderMode()
@@ -485,28 +482,84 @@ namespace rive
         return 0;
     }
 
-    Renderer* makeRenderer()
+    HRenderer createRenderer()
     {
         switch(g_RiveRenderMode)
         {
-            case MODE_TESSELLATION:     return new TessellationRenderer;
-            case MODE_STENCIL_TO_COVER: return new StencilToCoverRenderer;
+            case MODE_TESSELLATION:
+            {
+                TessellationRenderer* r = new TessellationRenderer;
+                r->m_RenderMode         = MODE_TESSELLATION;
+                return (HRenderer) r;
+            }
+            case MODE_STENCIL_TO_COVER:
+            {
+                StencilToCoverRenderer* r = new StencilToCoverRenderer;
+                r->m_RenderMode           = MODE_STENCIL_TO_COVER;
+                return (HRenderer) r;
+            }
             default:break;
         }
         return 0;
     }
 
-    Artboard* loadArtboardFromData(uint8_t* data, size_t dataLength)
+    void destroyRenderer(HRenderer renderer)
     {
-        File* file          = 0;
-        BinaryReader reader = BinaryReader(data, dataLength);
-        ImportResult result = File::import(reader, &file);
+        assert(renderer);
+        delete renderer;
+    }
 
-        if (result != ImportResult::success)
+    void newFrame(HRenderer renderer)
+    {
+        SharedRenderer* r = (SharedRenderer*) renderer;
+        r->m_AppliedClips.SetSize(0);
+        r->m_DrawEvents.SetSize(0);
+        r->m_IsClippingDirty = false;
+        r->m_RenderPaint = 0;
+        r->m_IsClipping = false;
+    }
+
+    uint32_t getDrawEventCount(HRenderer renderer)
+    {
+        SharedRenderer* r = (SharedRenderer*) renderer;
+        return r->m_DrawEvents.Size();
+    }
+
+    const PathDrawEvent getDrawEvent(HRenderer renderer, uint32_t i)
+    {
+        SharedRenderer* r = (SharedRenderer*) renderer;
+        return r->m_DrawEvents[i];
+    }
+
+    const DrawBuffers getDrawBuffers(HRenderPath path)
+    {
+        DrawBuffers buffers = {};
+
+        if (g_RiveRenderMode == MODE_TESSELLATION)
         {
-            return 0;
+            TessellationRenderPath* r             = (TessellationRenderPath*) path;
+            buffers.m_Tessellation.m_VertexBuffer = r->m_VertexBuffer;
+            buffers.m_Tessellation.m_IndexBuffer  = r->m_IndexBuffer;
+        }
+        else if (g_RiveRenderMode == MODE_STENCIL_TO_COVER)
+        {
+            StencilToCoverRenderPath* r                    = (StencilToCoverRenderPath*) path;
+            buffers.m_StencilToCover.m_ContourVertexBuffer = r->m_ContourVertexBuffer;
+            buffers.m_StencilToCover.m_ContourIndexBuffer  = r->m_ContourIndexBuffer;
+            buffers.m_StencilToCover.m_CoverVertexBuffer   = r->m_CoverVertexBuffer;
+            buffers.m_StencilToCover.m_CoverIndexBuffer    = r->m_CoverIndexBuffer;
         }
 
-        return file->artboard();
+        return buffers;
+    }
+
+    HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize)
+    {
+        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize);
+    }
+
+    void destroyBuffer(HBuffer buffer)
+    {
+        g_RiveDestroyBufferCb(buffer);
     }
 }

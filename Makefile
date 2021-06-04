@@ -39,9 +39,9 @@ endif
 OBJECTS := \
 	$(OBJDIR)/main.o \
 	$(OBJDIR)/app.o \
-	$(OBJDIR)/shared.o \
-	$(OBJDIR)/tessellation.o \
-	$(OBJDIR)/stencil_to_cover.o \
+	$(OBJDIR)/rive_render_private.o \
+	$(OBJDIR)/rive_render_tss.o \
+	$(OBJDIR)/rive_render_stc.o \
 	$(OBJDIR)/imgui.o \
 	$(OBJDIR)/imgui_draw.o \
 	$(OBJDIR)/imgui_widgets.o \
@@ -75,13 +75,13 @@ $(OBJDIR)/main.o: src/main.cpp
 $(OBJDIR)/app.o: src/app.cpp
 	@echo $(notdir $<)
 	$(CXX) $(ALL_CXXFLAGS) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/shared.o: src/rive/shared.cpp
+$(OBJDIR)/rive_render_private.o: src/rive/rive_render_private.cpp
 	@echo $(notdir $<)
 	$(CXX) $(ALL_CXXFLAGS) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/tessellation.o: src/rive/tessellation.cpp
+$(OBJDIR)/rive_render_tss.o: src/rive/rive_render_private_tss.cpp
 	@echo $(notdir $<)
 	$(CXX) $(ALL_CXXFLAGS) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/stencil_to_cover.o: src/rive/stencil_to_cover.cpp
+$(OBJDIR)/rive_render_stc.o: src/rive/rive_render_private_stc.cpp
 	@echo $(notdir $<)
 	$(CXX) $(ALL_CXXFLAGS) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
 $(OBJDIR)/imgui.o: $(DEPENDDIR)/imgui/imgui.cpp
