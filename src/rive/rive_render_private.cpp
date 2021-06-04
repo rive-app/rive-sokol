@@ -393,14 +393,6 @@ namespace rive
         }
     }
 
-    static inline PathDrawEvent paintEvent(SharedRenderPaint* paint)
-    {
-        return {
-            .m_Type  = EVENT_SET_PAINT,
-            .m_Paint = paint,
-        };
-    }
-
     void SharedRenderer::pushDrawEvent(PathDrawEvent event)
     {
         if (m_DrawEvents.Full())
@@ -415,7 +407,13 @@ namespace rive
         if (m_RenderPaint != rp)
         {
             m_RenderPaint = rp;
-            pushDrawEvent(paintEvent(rp));
+
+            PathDrawEvent evt = {
+                .m_Type  = EVENT_SET_PAINT,
+                .m_Paint = rp,
+            };
+
+            pushDrawEvent(evt);
         }
     }
 

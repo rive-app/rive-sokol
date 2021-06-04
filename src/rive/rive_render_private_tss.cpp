@@ -248,11 +248,14 @@ namespace rive
             for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pd = m_ClipPaths[i];
-                pushDrawEvent({
+
+                evt = {
                     .m_Type           = EVENT_DRAW,
                     .m_Path           = pd.m_Path,
                     .m_TransformWorld = pd.m_Transform,
-                });
+                };
+
+                pushDrawEvent(evt);
 
                 ((TessellationRenderPath*) pd.m_Path)->drawMesh(this, m_Transform);
             }
