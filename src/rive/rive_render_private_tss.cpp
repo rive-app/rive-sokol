@@ -242,29 +242,29 @@ namespace rive
 
         if (m_ClipPaths.Size() > 0)
         {
-            PathDrawEvent evt = { .m_Type = EVENT_CLIPPING_BEGIN };
-            pushDrawEvent(evt);
+            PathDrawEvent evtClippingBegin = { .m_Type = EVENT_CLIPPING_BEGIN };
+            pushDrawEvent(evtClippingBegin);
 
             for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pd = m_ClipPaths[i];
 
-                evt = {
+                PathDrawEvent evtDraw = {
                     .m_Type           = EVENT_DRAW,
                     .m_Path           = pd.m_Path,
                     .m_TransformWorld = pd.m_Transform,
                 };
 
-                pushDrawEvent(evt);
+                pushDrawEvent(evtDraw);
 
                 ((TessellationRenderPath*) pd.m_Path)->drawMesh(this, m_Transform);
             }
 
-            evt = {
+            PathDrawEvent evtClippingEnd = {
                 .m_Type             = EVENT_CLIPPING_END,
                 .m_AppliedClipCount = (uint32_t) m_ClipPaths.Size(),
             };
-            pushDrawEvent(evt);
+            pushDrawEvent(evtClippingEnd);
 
             m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
             m_AppliedClips.SetSize(0);
@@ -276,8 +276,8 @@ namespace rive
         }
         else
         {
-            PathDrawEvent evt = { .m_Type = EVENT_CLIPPING_DISABLE };
-            pushDrawEvent(evt);
+            PathDrawEvent evtClippingDisable = { .m_Type = EVENT_CLIPPING_DISABLE };
+            pushDrawEvent(evtClippingDisable);
         }
     }
 
