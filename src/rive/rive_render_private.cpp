@@ -9,9 +9,10 @@
 
 namespace rive
 {
-    static RenderMode      g_RiveRenderMode      = MODE_STENCIL_TO_COVER;
-    static RequestBufferCb g_RiveRequestBufferCb = 0;
-    static DestroyBufferCb g_RiveDestroyBufferCb = 0;
+    static RenderMode      g_RiveRenderMode       = MODE_STENCIL_TO_COVER;
+    static RequestBufferCb g_RiveRequestBufferCb  = 0;
+    static DestroyBufferCb g_RiveDestroyBufferCb  = 0;
+    static void*           g_RiveBufferCbUserData = 0;
 
     static void getColorArrayFromUint(unsigned int colorIn, float* rgbaOut)
     {
@@ -432,10 +433,11 @@ namespace rive
         return r->m_IsClippingSupported;
     }
 
-    void setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb)
+    void setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb, void* userData)
     {
-        g_RiveRequestBufferCb = rcb;
-        g_RiveDestroyBufferCb = dcb;
+        g_RiveRequestBufferCb  = rcb;
+        g_RiveDestroyBufferCb  = dcb;
+        g_RiveBufferCbUserData = userData;
     }
 
     void setRenderMode(RenderMode mode)
@@ -555,11 +557,11 @@ namespace rive
 
     HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize)
     {
-        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize);
+        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize, g_RiveBufferCbUserData);
     }
 
     void destroyBuffer(HBuffer buffer)
     {
-        g_RiveDestroyBufferCb(buffer);
+        g_RiveDestroyBufferCb(buffer, g_RiveBufferCbUserData);
     }
 }

@@ -319,7 +319,7 @@ static inline void Mat2DToMat4(const rive::Mat2D m2, mat4x4 m4)
     m4[3][3] = 1.0;
 }
 
-static rive::HBuffer AppRequestBufferCallback(rive::HBuffer buffer, rive::BufferType type, void* data, unsigned int dataSize)
+static rive::HBuffer AppRequestBufferCallback(rive::HBuffer buffer, rive::BufferType type, void* data, unsigned int dataSize, void* userData)
 {
     if (dataSize == 0)
     {
@@ -361,7 +361,7 @@ static rive::HBuffer AppRequestBufferCallback(rive::HBuffer buffer, rive::Buffer
     return (rive::HBuffer) buf;
 }
 
-static void AppDestroyBufferCallback(rive::HBuffer buffer)
+static void AppDestroyBufferCallback(rive::HBuffer buffer, void* userData)
 {
     App::GpuBuffer* buf = (App::GpuBuffer*) buffer;
     if (buf != 0)

@@ -14,8 +14,8 @@ namespace rive
         BUFFER_TYPE_INDEX_BUFFER  = 1,
     };
 
-    typedef HBuffer (*RequestBufferCb)(HBuffer buffer, BufferType type, void* data, unsigned int dataSize);
-    typedef void    (*DestroyBufferCb)(HBuffer buffer);
+    typedef HBuffer (*RequestBufferCb)(HBuffer buffer, BufferType type, void* data, unsigned int dataSize, void* userData);
+    typedef void    (*DestroyBufferCb)(HBuffer buffer, void* userData);
 
     enum FillType
     {
@@ -86,7 +86,7 @@ namespace rive
         float        m_GradientLimits[4];
     };
 
-    void                setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb);
+    void                setBufferCallbacks(RequestBufferCb rcb, DestroyBufferCb dcb, void* userData = 0);
     void                setRenderMode(RenderMode mode);
     void                setContourQuality(HRenderer renderer, float quality);
     void                setClippingSupport(HRenderer renderer, bool state);
