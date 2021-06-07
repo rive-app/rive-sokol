@@ -25,7 +25,7 @@ OBJDIR            = $(BIULDDIR)/obj/$(config)
 INCLUDES       += -Isrc -I$(DEPENDDIR)/glfw/include -I$(DEPENDDIR)/sokol -I$(DEPENDDIR)/rive-cpp/include -I$(DEPENDDIR)/jc_containers/src -I$(DEPENDDIR)/libtess2/Include -I$(DEPENDDIR)/linmath.h -I$(DEPENDDIR)/imgui
 ALL_CPPFLAGS   += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
 ALL_LDFLAGS    += $(LDFLAGS) $(PLATFORM_LDFLAGS) -L$(TARGETDIR) -L$(DEPENDDIR)/glfw_build/src -L$(DEPENDDIR)/rive-cpp/build/bin/${config} -L$(DEPENDDIR)/libtess2/Build
-LIBS 		   += -lglfw3 -lrive -ltess2_${config} -lrivesokol $(PLATFORM_LIBS)
+LIBS 		   += -lglfw3 -lrive -lrivesokol -ltess2_${config} $(PLATFORM_LIBS)
 LINKCMD         = $(CXX) -o "$@" $(OBJECTS) $(ALL_LDFLAGS) $(LIBS)
 LINKCMD_LIBRARY = $(AR) -rcs "$@" $(OBJECTS_LIBRARY)
 
