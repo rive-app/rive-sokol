@@ -56,13 +56,6 @@ namespace rive
         uint32_t          m_IsClipping       : 1;
     };
 
-    struct CreateRendererParams
-    {
-        RenderMode      m_RenderMode;
-        RequestBufferCb m_RequestBufferCb;
-        DestroyBufferCb m_DestroyBufferCb;
-    };
-
     struct DrawBuffers
     {
         union
