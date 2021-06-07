@@ -13,18 +13,21 @@ ifeq ($(origin AR), default)
   AR = ar
 endif
 
-BUILDNAME = rive_sokol
-BIULDDIR  = build
-DEPENDDIR = $(BIULDDIR)/dependencies
-TARGETDIR = $(BIULDDIR)/bin/$(config)
-TARGET    = $(TARGETDIR)/$(BUILDNAME)
-OBJDIR    = $(BIULDDIR)/obj/$(config)
+BUILDNAME_BINARY  = rive_sokol
+BUILDNAME_LIBRARY = librivesokol.a
+BIULDDIR          = build
+DEPENDDIR         = $(BIULDDIR)/dependencies
+TARGETDIR         = $(BIULDDIR)/bin/$(config)
+TARGET            = $(TARGETDIR)/$(BUILDNAME_BINARY)
+LIBRARY           = $(TARGETDIR)/$(BUILDNAME_LIBRARY)
+OBJDIR            = $(BIULDDIR)/obj/$(config)
 
-INCLUDES     += -Isrc -I$(DEPENDDIR)/glfw/include -I$(DEPENDDIR)/sokol -I$(DEPENDDIR)/rive-cpp/include -I$(DEPENDDIR)/jc_containers/src -I$(DEPENDDIR)/libtess2/Include -I$(DEPENDDIR)/linmath.h -I$(DEPENDDIR)/imgui
-ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
-ALL_LDFLAGS  += $(LDFLAGS) $(PLATFORM_LDFLAGS) -L$(DEPENDDIR)/glfw_build/src -L$(DEPENDDIR)/rive-cpp/build/bin/${config} -L$(DEPENDDIR)/libtess2/Build
-LIBS 		 += -lglfw3 -lrive -ltess2_${config} $(PLATFORM_LIBS)
-LINKCMD       = $(CXX) -o "$@" $(OBJECTS) $(ALL_LDFLAGS) $(LIBS)
+INCLUDES       += -Isrc -I$(DEPENDDIR)/glfw/include -I$(DEPENDDIR)/sokol -I$(DEPENDDIR)/rive-cpp/include -I$(DEPENDDIR)/jc_containers/src -I$(DEPENDDIR)/libtess2/Include -I$(DEPENDDIR)/linmath.h -I$(DEPENDDIR)/imgui
+ALL_CPPFLAGS   += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
+ALL_LDFLAGS    += $(LDFLAGS) $(PLATFORM_LDFLAGS) -L$(TARGETDIR) -L$(DEPENDDIR)/glfw_build/src -L$(DEPENDDIR)/rive-cpp/build/bin/${config} -L$(DEPENDDIR)/libtess2/Build
+LIBS 		   += -lglfw3 -lrive -lrivesokol -ltess2_${config} $(PLATFORM_LIBS)
+LINKCMD         = $(CXX) -o "$@" $(OBJECTS) $(ALL_LDFLAGS) $(LIBS)
+LINKCMD_LIBRARY = $(AR) -rcs "$@" $(OBJECTS_LIBRARY)
 
 ifeq ($(config),debug)
 	DEFINES      += -DDEBUG
@@ -36,12 +39,14 @@ else ifeq ($(config),release)
 	ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -O2 -Wall -std=c++17 -fno-exceptions -fno-rtti
 endif
 
-OBJECTS := \
-	$(OBJDIR)/main.o \
-	$(OBJDIR)/app.o \
+OBJECTS_LIBRARY := \
 	$(OBJDIR)/rive_render_private.o \
 	$(OBJDIR)/rive_render_tss.o \
 	$(OBJDIR)/rive_render_stc.o \
+
+OBJECTS := \
+	$(OBJDIR)/main.o \
+	$(OBJDIR)/app.o \
 	$(OBJDIR)/imgui.o \
 	$(OBJDIR)/imgui_draw.o \
 	$(OBJDIR)/imgui_widgets.o \
@@ -49,7 +54,15 @@ OBJECTS := \
 
 .PHONY: clean prebuild
 
-all: prebuild $(TARGET)
+all: prebuild $(TARGET) $(LIBRARY)
+
+library: prebuild $(LIBRARY)
+
+viewer: prebuild $(TARGET)
+
+$(LIBRARY): $(OBJECTS_LIBRARY) | $(TARGETDIR)
+	@echo Linking library
+	$(LINKCMD_LIBRARY)
 
 $(TARGET): $(OBJECTS) | $(TARGETDIR)
 	@echo Linking
@@ -67,6 +80,7 @@ prebuild: | $(OBJDIR)
 
 clean:
 	rm -f $(TARGET)
+	rm -f $(LIBRARY)
 	rm -rf $(OBJDIR)
 
 $(OBJDIR)/main.o: src/main.cpp
