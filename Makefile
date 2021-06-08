@@ -54,7 +54,7 @@ OBJECTS := \
 
 .PHONY: clean prebuild
 
-all: prebuild $(TARGET) $(LIBRARY)
+all: prebuild $(LIBRARY) $(TARGET)
 
 library: prebuild $(LIBRARY)
 
