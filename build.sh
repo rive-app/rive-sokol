@@ -1,7 +1,7 @@
 #!/bin/sh
 
 OPTION1=$1
-OPTION2=$1
+OPTION2=$2
 export TOOLS_DIR=build/tools
 export PLATFORM_OSX="macos"
 export PLATFORM_WINDOWS="win32"
