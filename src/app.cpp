@@ -603,6 +603,7 @@ bool AppBootstrap(int argc, char const *argv[])
     ////////////////////////////////////////////////////
     // Rive setup
     ////////////////////////////////////////////////////
+    g_app.m_Ctx = rive::createContext();
     rive::setBufferCallbacks(g_app.m_Ctx, AppRequestBufferCallback, AppDestroyBufferCallback);
     rive::setRenderMode(g_app.m_Ctx, rive::MODE_STENCIL_TO_COVER);
     g_app.m_Renderer = rive::createRenderer(g_app.m_Ctx);
@@ -1332,6 +1333,8 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
 
 void AppShutdown()
 {
+    rive::destroyRenderer(g_app.m_Renderer);
+    rive::destroyContext(g_app.m_Ctx);
     sg_shutdown();
     glfwTerminate();
 }
