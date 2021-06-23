@@ -3,6 +3,7 @@
 
 #include <renderer.hpp>
 #include <artboard.hpp>
+#include <contour_render_path.hpp>
 
 #include "rive/rive_render_api.h"
 #include "rive/rive_render_private.h"
@@ -11,6 +12,7 @@ namespace rive
 {
     StencilToCoverRenderer::StencilToCoverRenderer()
     {
+        /*
         m_FullscreenPath = new StencilToCoverRenderPath;
 
         m_FullscreenPath->m_Limits = {
@@ -21,6 +23,7 @@ namespace rive
         };
 
         m_FullscreenPath->updateBuffers();
+        */
     }
 
     StencilToCoverRenderer::~StencilToCoverRenderer()
@@ -87,7 +90,7 @@ namespace rive
 
     void StencilToCoverRenderer::applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform)
     {
-        bool isEvenOdd = path->getFillRule() == FillRule::evenOdd;
+        bool isEvenOdd = path->fillRule() == FillRule::evenOdd;
         path->stencil(this, transform, 0, isEvenOdd, m_IsClipping);
 
         if (m_IsClipping)
@@ -127,29 +130,42 @@ namespace rive
         }
 
         setPaint(rp);
-        bool isEvenOdd = p->getFillRule() == FillRule::evenOdd;
+        bool isEvenOdd = p->fillRule() == FillRule::evenOdd;
         p->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
         p->cover(this, m_Transform, Mat2D(), m_IsClipping);
     }
 
     /* StencilToCoverRenderPath impl */
     StencilToCoverRenderPath::StencilToCoverRenderPath()
-    : m_ContourIndexCount(0)
-    , m_ContourVertexBuffer(0)
+    : m_VertexBuffer(0)
+    // : m_ContourIndexCount(0)
+    /*
+    : m_ContourVertexBuffer(0)
     , m_ContourIndexBuffer(0)
     , m_CoverVertexBuffer(0)
     , m_CoverIndexBuffer(0)
     , m_ContourError(0.0f)
-    {}
+    */
+    {
+    }
 
     StencilToCoverRenderPath::~StencilToCoverRenderPath()
     {
+        destroyBuffer(m_VertexBuffer);
+        /*
         destroyBuffer(m_ContourVertexBuffer);
         destroyBuffer(m_ContourIndexBuffer);
         destroyBuffer(m_CoverVertexBuffer);
         destroyBuffer(m_CoverIndexBuffer);
+        */
     }
 
+    void StencilToCoverRenderPath::fillRule(FillRule value)
+    {
+        m_FillRule = value;
+    }
+
+    /*
     void StencilToCoverRenderPath::computeContour()
     {
         const float minSegmentLength = m_ContourError * m_ContourError;
@@ -277,12 +293,13 @@ namespace rive
         #undef ADD_VERTEX
         #undef PEN_DOWN
     }
+    */
 
-    void StencilToCoverRenderPath::updateBuffers()
+    void StencilToCoverRenderPath::updateBuffers(SharedRenderer* renderer)
     {
         const float coverVertexData[] = {
-            m_Limits.m_MinX, m_Limits.m_MinY, m_Limits.m_MaxX, m_Limits.m_MinY,
-            m_Limits.m_MaxX, m_Limits.m_MaxY, m_Limits.m_MinX, m_Limits.m_MaxY,
+            m_ContourBounds.minX, m_ContourBounds.minY, m_ContourBounds.maxX, m_ContourBounds.minY,
+            m_ContourBounds.maxX, m_ContourBounds.maxY, m_ContourBounds.minX, m_ContourBounds.maxY,
         };
 
         const int coverIndexData[] = {
@@ -290,14 +307,22 @@ namespace rive
             2, 3, 0,
         };
 
-        m_ContourVertexBuffer = requestBuffer(m_ContourVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, m_ContourVertexData, m_ContourVertexCount * sizeof(float) * 2);
+        std::size_t vertexCount = m_ContourVertices.size();
+        renderer->updateIndexBuffer(vertexCount - 3);
+
+        m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, &m_ContourVertices[0][0], vertexCount * sizeof(float) * 2.0f);
+
+        /*
+        m_ContourVertexBuffer = requestBuffer(m_ContourVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, &m_ContourVertices.begin(), m_ContourVertices.size(); * sizeof(float) * 2);
         m_ContourIndexBuffer  = requestBuffer(m_ContourIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, m_ContourIndexData, m_ContourIndexCount * sizeof(int));
         m_CoverVertexBuffer   = requestBuffer(m_CoverVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertexData, sizeof(coverVertexData));
         m_CoverIndexBuffer    = requestBuffer(m_CoverIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) coverIndexData, sizeof(coverIndexData));
+        */
     }
 
     void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping)
     {
+        /*
         if (m_Paths.Size() > 0)
         {
             for (int i = 0; i < m_Paths.Size(); ++i)
@@ -312,15 +337,16 @@ namespace rive
             }
             return;
         }
+        */
 
         float currentContourError = getContourError((HRenderer) renderer);
-        m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
-        m_ContourError            = currentContourError;
+        //m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
+        //m_ContourError            = currentContourError;
 
-        if (m_IsDirty)
+        if (isDirty())
         {
             computeContour();
-            updateBuffers();
+            updateBuffers(renderer);
         }
 
         PathDrawEvent evt = {
@@ -337,6 +363,7 @@ namespace rive
 
     void StencilToCoverRenderPath::cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping)
     {
+        /*
         if (m_Paths.Size() > 0)
         {
             for (int i = 0; i < m_Paths.Size(); ++i)
@@ -351,16 +378,19 @@ namespace rive
             }
             return;
         }
+        */
 
         float currentContourError = getContourError((HRenderer) renderer);
-        m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
-        m_ContourError            = currentContourError;
+        //m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
+        //m_ContourError            = currentContourError;
 
-        if (m_IsDirty)
+        /*
+        if (isDirty())
         {
             computeContour();
             updateBuffers();
         }
+        */
 
         PathDrawEvent evt = {
             .m_Type           = EVENT_DRAW_COVER,

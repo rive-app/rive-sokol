@@ -592,7 +592,8 @@ bool AppBootstrap(int argc, char const *argv[])
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
     rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
     g_app.m_Renderer = rive::createRenderer();
-    rive::setClippingSupport(g_app.m_Renderer, true);
+    // rive::setClippingSupport(g_app.m_Renderer, true);
+    rive::setClippingSupport(g_app.m_Renderer, false);
 
     for (int i = 1; i < argc; ++i)
     {
@@ -675,6 +676,8 @@ bool AppBootstrap(int argc, char const *argv[])
     imguiPipelineDesc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     imguiPipelineDesc.colors[0].write_mask           = SG_COLORMASK_RGB;
     g_app.m_ImguiPipeline                            = sg_make_pipeline(&imguiPipelineDesc);
+
+    g_app.m_DebugView = App::DEBUG_VIEW_CONTOUR;
 
     return true;
 }
@@ -976,9 +979,9 @@ struct AppTessellationRenderer
 
     void DrawPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(evt.m_Path);
-        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_Tessellation.m_VertexBuffer;
-        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_Tessellation.m_IndexBuffer;
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
@@ -1020,9 +1023,9 @@ struct AppTessellationRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(evt.m_Path);
-        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_Tessellation.m_VertexBuffer;
-        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_Tessellation.m_IndexBuffer;
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
@@ -1073,7 +1076,8 @@ struct AppSTCRenderer
                     else obj.StencilPass(evt);
                     break;
                 case rive::EVENT_DRAW_COVER:
-                    obj.CoverPass(evt);
+                    if (g_app.m_DebugView == App::DEBUG_VIEW_NONE)
+                        obj.CoverPass(evt);
                     break;
                 case rive::EVENT_CLIPPING_BEGIN:
                     obj.BeginClipping(evt);
@@ -1141,9 +1145,9 @@ struct AppSTCRenderer
 
     void StencilPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers     = rive::getDrawBuffers(evt.m_Path);
-        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourVertexBuffer;
-        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourIndexBuffer;
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer; //buffers.m_StencilToCover.m_ContourVertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer; //buffers.m_StencilToCover.m_ContourIndexBuffer;
 
         if (!IS_BUFFER_VALID(contourVertexBuffer) ||
             !IS_BUFFER_VALID(contourIndexBuffer))
@@ -1190,9 +1194,9 @@ struct AppSTCRenderer
 
     void CoverPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers   = rive::getDrawBuffers(evt.m_Path);
-        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_CoverVertexBuffer;
-        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_CoverIndexBuffer;
+        const rive::DrawBuffers buffers   = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(coverVertexBuffer) ||
             !IS_BUFFER_VALID(coverIndexBuffer))
@@ -1255,9 +1259,9 @@ struct AppSTCRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        const rive::DrawBuffers buffers     = rive::getDrawBuffers(evt.m_Path);
-        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourVertexBuffer;
-        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourIndexBuffer;
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
         if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
         {
             const rive::PaintData paintData = rive::getPaintData(m_Paint);

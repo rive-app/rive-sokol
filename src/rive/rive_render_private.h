@@ -3,6 +3,7 @@
 
 namespace rive
 {
+    /*
     enum PathCommandType
     {
         TYPE_MOVE  = 0,
@@ -21,6 +22,7 @@ namespace rive
         float           m_IX;
         float           m_IY;
     };
+    */
 
     struct PathDescriptor
     {
@@ -76,6 +78,7 @@ namespace rive
         bool                      m_IsVisible;
     };
 
+    /*
     class SharedRenderPath : public RenderPath
     {
     public:
@@ -101,6 +104,7 @@ namespace rive
         inline FillRule getFillRule() { return m_FillRule; }
         bool            isShapeDirty();
     };
+    */
 
     class SharedRenderer : public Renderer
     {
@@ -113,6 +117,7 @@ namespace rive
             uint8_t        m_ClipPathsCount;
         };
 
+        std::vector<unsigned int> m_Indices;
         RenderMode                m_RenderMode;
         jc::Array<StackEntry>     m_ClipPathStack;
         jc::Array<PathDescriptor> m_ClipPaths;
@@ -120,11 +125,14 @@ namespace rive
         jc::Array<PathDrawEvent>  m_DrawEvents;
         Mat2D                     m_Transform;
         SharedRenderPaint*        m_RenderPaint;
+        HBuffer                   m_IndexBuffer;
         float                     m_ContourQuality;
         uint8_t                   m_IsClippingDirty     : 1;
         uint8_t                   m_IsClipping          : 1;
         uint8_t                   m_IsClippingSupported : 1;
 
+        SharedRenderer();
+        ~SharedRenderer();
         void save()                            override;
         void restore()                         override;
         void transform(const Mat2D& transform) override;
@@ -133,6 +141,7 @@ namespace rive
 
         void pushDrawEvent(PathDrawEvent evt);
         void setPaint(SharedRenderPaint* rp);
+        void updateIndexBuffer(size_t contourLength);
     };
 
     ////////////////////////////////////////////////////
@@ -143,7 +152,6 @@ namespace rive
     {
     public:
         StencilToCoverRenderPath* m_FullscreenPath;
-
         StencilToCoverRenderer();
         ~StencilToCoverRenderer();
         void drawPath(RenderPath* path, RenderPaint* paint) override;
@@ -151,27 +159,35 @@ namespace rive
         void applyClipPath(StencilToCoverRenderPath* path, const Mat2D& transform);
     };
 
-    class StencilToCoverRenderPath : public SharedRenderPath
+    class StencilToCoverRenderPath : public ContourRenderPath
     {
     public:
+        /*
         // TODO: use a global buffer or something else
         static const uint32_t COUNTOUR_BUFFER_ELEMENT_COUNT = 128 * 3;
         uint32_t          m_ContourIndexData[COUNTOUR_BUFFER_ELEMENT_COUNT];
         uint32_t          m_ContourIndexCount;
-        HBuffer           m_ContourVertexBuffer;
-        HBuffer           m_ContourIndexBuffer;
-        HBuffer           m_CoverVertexBuffer;
-        HBuffer           m_CoverIndexBuffer;
-        float             m_ContourError;
-        PathLimits        m_Limits;
+        */
+
+        FillRule m_FillRule;
+        HBuffer  m_VertexBuffer;
+        // HBuffer           m_ContourVertexBuffer;
+        // HBuffer           m_ContourIndexBuffer;
+        // HBuffer           m_CoverVertexBuffer;
+        // HBuffer           m_CoverIndexBuffer;
+        // float             m_ContourError;
+        // PathLimits        m_Limits;
 
         StencilToCoverRenderPath();
         ~StencilToCoverRenderPath();
 
         void stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping);
         void cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping);
-        void computeContour();
-        void updateBuffers();
+        // void computeContour();
+        void updateBuffers(SharedRenderer* renderer);
+        void fillRule(FillRule value) override;
+        FillRule fillRule() const { return m_FillRule; }
+
         friend class StencilToCoverRenderer;
     };
 
@@ -185,14 +201,15 @@ namespace rive
         void applyClipping();
     };
 
-    class TessellationRenderPath : public SharedRenderPath
+    class TessellationRenderPath : public ContourRenderPath
     {
     public:
-        float   m_ContourError;
-        HBuffer m_VertexBuffer;
-        HBuffer m_IndexBuffer;
+        FillRule m_FillRule;
+        float    m_ContourError;
+        HBuffer  m_VertexBuffer;
+        HBuffer  m_IndexBuffer;
 
-        void computeContour();
+        // void computeContour();
         void addContours(void* tess, const Mat2D& m);
         void updateContour(float contourError);
         void updateTesselation(float contourError);
@@ -200,6 +217,8 @@ namespace rive
         TessellationRenderPath();
         ~TessellationRenderPath();
         void drawMesh(SharedRenderer* renderer, const Mat2D& transform);
+        void fillRule(FillRule value) override;
+        FillRule fillRule() const { return m_FillRule; }
     };
 
     ////////////////////////////////////////////////////

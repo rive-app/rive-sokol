@@ -58,6 +58,9 @@ namespace rive
 
     struct DrawBuffers
     {
+        HBuffer m_VertexBuffer;
+        HBuffer m_IndexBuffer;
+        /*
         union
         {
             struct
@@ -74,6 +77,7 @@ namespace rive
                 HBuffer m_IndexBuffer;
             } m_Tessellation;
         };
+        */
     };
 
     struct PaintData
@@ -100,7 +104,7 @@ namespace rive
     void                newFrame(HRenderer renderer);
     uint32_t            getDrawEventCount(HRenderer renderer);
     const PathDrawEvent getDrawEvent(HRenderer renderer, uint32_t i);
-    const DrawBuffers   getDrawBuffers(HRenderPath path);
+    const DrawBuffers   getDrawBuffers(HRenderer renderer, HRenderPath path);
 }
 
 #endif /* _RIVE_RENDER_API_H_ */

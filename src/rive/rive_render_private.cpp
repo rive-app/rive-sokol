@@ -4,6 +4,8 @@
 #include <jc/array.h>
 
 #include <artboard.hpp>
+#include <contour_render_path.hpp>
+
 #include "rive/rive_render_api.h"
 #include "rive/rive_render_private.h"
 
@@ -22,6 +24,7 @@ namespace rive
         rgbaOut[3] = (float)((0xff000000 & colorIn) >> 24) / 255.0f;
     }
 
+    /*
     static bool tooFar(const Vec2D& a, const Vec2D& b, float distTooFar)
     {
         return fmax(fabs(a[0] - b[0]), fabs(a[1] - b[1])) > distTooFar;
@@ -131,6 +134,7 @@ namespace rive
             }
         }
     }
+    */
 
     SharedRenderPaint::SharedRenderPaint()
     : m_Builder(0)
@@ -213,6 +217,8 @@ namespace rive
     }
 
     /* Shared RenderPaint */
+
+    /*
     void SharedRenderPath::addRenderPath(RenderPath* path, const Mat2D& transform)
     {
         PathDescriptor desc = {path, transform};
@@ -302,7 +308,9 @@ namespace rive
             .m_Command = TYPE_CLOSE
         });
     }
+    */
 
+    /*
     SharedRenderPath::SharedRenderPath()
     : m_ContourVertexCount(0)
     , m_IsDirty(true)
@@ -344,8 +352,47 @@ namespace rive
 
         return dirty;
     }
+    */
 
     /* Shared Renderer */
+    SharedRenderer::SharedRenderer()
+    : m_IndexBuffer(0)
+    {
+        m_Indices.emplace_back(0);
+        m_Indices.emplace_back(1);
+        m_Indices.emplace_back(2);
+        m_Indices.emplace_back(2);
+        m_Indices.emplace_back(3);
+        m_Indices.emplace_back(0);
+    }
+
+    SharedRenderer::~SharedRenderer()
+    {
+        destroyBuffer(m_IndexBuffer);
+    }
+
+    void SharedRenderer::updateIndexBuffer(size_t contourLength)
+    {
+        if (contourLength < 2)
+        {
+            return;
+        }
+        uint32_t edgeCount       = (m_Indices.size() - 6) / 3;
+        uint32_t targetEdgeCount = contourLength - 2;
+        if (edgeCount < targetEdgeCount)
+        {
+            while (edgeCount < targetEdgeCount)
+            {
+                m_Indices.push_back(3);
+                m_Indices.push_back(edgeCount + 4);
+                m_Indices.push_back(edgeCount + 5);
+                edgeCount++;
+            }
+
+            m_IndexBuffer = requestBuffer(m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, &m_Indices[0], m_Indices.size() * sizeof(int));
+        }
+    }
+
     void SharedRenderer::clipPath(RenderPath* path)
     {
         if (m_ClipPaths.Full())
@@ -539,10 +586,24 @@ namespace rive
         return r->m_DrawEvents[i];
     }
 
-    const DrawBuffers getDrawBuffers(HRenderPath path)
+    // const DrawBuffers getDrawBuffers(HRenderPath path)
+    const DrawBuffers getDrawBuffers(HRenderer renderer, HRenderPath path)
     {
-        DrawBuffers buffers = {};
+        DrawBuffers buffers  = {};
+        SharedRenderer* r    = (SharedRenderer*) renderer;
+        HBuffer indexBuffer  = r->m_IndexBuffer;
+        HBuffer vertexBuffer = 0;
 
+        if (g_RiveRenderMode == MODE_STENCIL_TO_COVER)
+        {
+            StencilToCoverRenderPath* r = (StencilToCoverRenderPath*) path;
+            vertexBuffer = r->m_VertexBuffer;
+        }
+
+        buffers.m_IndexBuffer  = indexBuffer;
+        buffers.m_VertexBuffer = vertexBuffer;
+
+        /*
         if (g_RiveRenderMode == MODE_TESSELLATION)
         {
             TessellationRenderPath* r             = (TessellationRenderPath*) path;
@@ -557,13 +618,15 @@ namespace rive
             buffers.m_StencilToCover.m_CoverVertexBuffer   = r->m_CoverVertexBuffer;
             buffers.m_StencilToCover.m_CoverIndexBuffer    = r->m_CoverIndexBuffer;
         }
+        */
 
         return buffers;
     }
 
     HBuffer requestBuffer(HBuffer buffer, BufferType bufferType, void* data, unsigned int dataSize)
     {
-        return g_RiveRequestBufferCb(buffer, bufferType, data, dataSize, g_RiveBufferCbUserData);
+        HBuffer out = g_RiveRequestBufferCb(buffer, bufferType, data, dataSize, g_RiveBufferCbUserData);
+        return out;
     }
 
     void destroyBuffer(HBuffer buffer)
