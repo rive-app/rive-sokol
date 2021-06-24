@@ -16,15 +16,16 @@
 namespace rive
 {
 	/* TessellationRenderPath Impl */
-    TessellationRenderPath::TessellationRenderPath()
-    : m_VertexBuffer(0)
+    TessellationRenderPath::TessellationRenderPath(Context* ctx)
+    : SharedRenderPath(ctx)
+    , m_VertexBuffer(0)
     , m_IndexBuffer(0)
     {}
 
     TessellationRenderPath::~TessellationRenderPath()
     {
-        destroyBuffer(m_VertexBuffer);
-        destroyBuffer(m_IndexBuffer);
+        m_Context->m_DestroyBufferCb(m_VertexBuffer, m_Context->m_BufferCbUserData);
+        m_Context->m_DestroyBufferCb(m_IndexBuffer, m_Context->m_BufferCbUserData);
     }
 
     void TessellationRenderPath::fillRule(FillRule value)
@@ -78,14 +79,14 @@ namespace rive
         }
     }
 
-    void TessellationRenderPath::updateContour(float contourError)
+    void TessellationRenderPath::updateContour()
     {
         if (isContainer())
         {
             for (int i = 0; i < m_SubPaths.size(); ++i)
             {
                 TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_SubPaths[i].path();
-                sharedPath->updateContour(contourError);
+                sharedPath->updateContour();
             }
         }
 
@@ -95,14 +96,14 @@ namespace rive
         }
     }
 
-    void TessellationRenderPath::updateTesselation(float contourError)
+    void TessellationRenderPath::updateTesselation()
     {
         if (!isDirty())
         {
             return;
         }
 
-        updateContour(contourError);
+        updateContour();
 
         TESStesselator* tess = tessNewTess(0);
 
@@ -121,8 +122,8 @@ namespace rive
             const TESSreal*  tessVertices      = tessGetVertices(tess);
             const TESSindex* tessElements      = tessGetElements(tess);
 
-            m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize);
-            m_IndexBuffer  = requestBuffer(m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize);
+            m_VertexBuffer = m_Context->m_RequestBufferCb(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize, m_Context->m_BufferCbUserData);
+            m_IndexBuffer  = m_Context->m_RequestBufferCb(m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize, m_Context->m_BufferCbUserData);
         }
 
         tessDeleteTess(tess);
@@ -130,10 +131,15 @@ namespace rive
 
     void TessellationRenderPath::drawMesh(SharedRenderer* renderer, const Mat2D& transform)
     {
-        updateTesselation(getContourError(renderer));
+        updateTesselation();
     }
 
     /* Renderer impl */
+    TessellationRenderer::TessellationRenderer(Context* ctx)
+    {
+        m_Context = ctx;
+    }
+
     void TessellationRenderer::applyClipping()
     {
         bool same = true;

@@ -10,16 +10,17 @@
 
 namespace rive
 {
-    StencilToCoverRenderer::StencilToCoverRenderer()
+    StencilToCoverRenderer::StencilToCoverRenderer(Context* ctx)
     {
         const float coverVertices[] = {
             -1.0f, -1.0f,  1.0f, -1.0f,
              1.0f,  1.0f, -1.0f,  1.0f,
         };
 
-        m_FullscreenPath                 = new StencilToCoverRenderPath;
-        m_FullscreenPath->m_VertexBuffer = requestBuffer(m_FullscreenPath->m_VertexBuffer,
-            BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertices, sizeof(coverVertices));
+        m_Context = ctx;
+        m_FullscreenPath                 = new StencilToCoverRenderPath(ctx);
+        m_FullscreenPath->m_VertexBuffer = m_Context->m_RequestBufferCb(m_FullscreenPath->m_VertexBuffer,
+            BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertices, sizeof(coverVertices), m_Context->m_BufferCbUserData);
     }
 
     StencilToCoverRenderer::~StencilToCoverRenderer()
@@ -132,12 +133,14 @@ namespace rive
     }
 
     /* StencilToCoverRenderPath impl */
-    StencilToCoverRenderPath::StencilToCoverRenderPath()
-    : m_VertexBuffer(0) {}
+    StencilToCoverRenderPath::StencilToCoverRenderPath(Context* ctx)
+    : SharedRenderPath(ctx)
+    , m_VertexBuffer(0)
+    {}
 
     StencilToCoverRenderPath::~StencilToCoverRenderPath()
     {
-        destroyBuffer(m_VertexBuffer);
+        m_Context->m_DestroyBufferCb(m_VertexBuffer, m_Context->m_BufferCbUserData);
     }
 
     void StencilToCoverRenderPath::fillRule(FillRule value)
@@ -149,7 +152,8 @@ namespace rive
     {
         std::size_t vertexCount = m_ContourVertices.size();
         renderer->updateIndexBuffer(vertexCount - 3);
-        m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, &m_ContourVertices[0][0], vertexCount * sizeof(float) * 2.0f);
+        m_VertexBuffer = renderer->m_Context->m_RequestBufferCb(m_VertexBuffer,
+            BUFFER_TYPE_VERTEX_BUFFER, &m_ContourVertices[0][0], vertexCount * sizeof(float) * 2.0f, renderer->m_Context->m_BufferCbUserData);
     }
 
     void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping)

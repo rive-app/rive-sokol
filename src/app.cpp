@@ -82,11 +82,12 @@ static struct App
         }
     };
 
-    // GLFW
-    GLFWwindow*                m_Window;
     // Rive
+    rive::HContext             m_Ctx;
     ArtboardContext            m_ArtboardContexts[MAX_ARTBOARD_CONTEXTS];
     rive::HRenderer            m_Renderer;
+    // GLFW
+    GLFWwindow*                m_Window;
     // Sokol
     sg_shader                  m_MainShader;
     sg_pipeline                m_TessellationIsClippingPipelines[256];
@@ -113,6 +114,19 @@ static struct App
     DebugView                  m_DebugView;
     DebugViewData              m_DebugViewData;
 } g_app;
+
+namespace rive
+{
+    RenderPath* makeRenderPath()
+    {
+        return createRenderPath(g_app.m_Ctx);
+    }
+
+    RenderPaint* makeRenderPaint()
+    {
+        return createRenderPaint(g_app.m_Ctx);
+    }
+}
 
 static bool LoadFileFromPath(const char* path, uint8_t** bytesOut, size_t* bytesLengthOut)
 {
@@ -589,10 +603,10 @@ bool AppBootstrap(int argc, char const *argv[])
     ////////////////////////////////////////////////////
     // Rive setup
     ////////////////////////////////////////////////////
-    rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
-    rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
-    // rive::setRenderMode(rive::MODE_TESSELLATION);
-    g_app.m_Renderer = rive::createRenderer();
+    g_app.m_Ctx = rive::createContext();
+    rive::setBufferCallbacks(g_app.m_Ctx, AppRequestBufferCallback, AppDestroyBufferCallback);
+    rive::setRenderMode(g_app.m_Ctx, rive::MODE_STENCIL_TO_COVER);
+    g_app.m_Renderer = rive::createRenderer(g_app.m_Ctx);
     rive::setClippingSupport(g_app.m_Renderer, true);
 
     for (int i = 1; i < argc; ++i)
@@ -976,7 +990,7 @@ struct AppTessellationRenderer
 
     void DrawPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
         App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
         App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
@@ -1020,7 +1034,7 @@ struct AppTessellationRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
         App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
         App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
@@ -1142,7 +1156,7 @@ struct AppSTCRenderer
 
     void StencilPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
         App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
         App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
@@ -1197,7 +1211,7 @@ struct AppSTCRenderer
 
     void CoverPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers   = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        const rive::DrawBuffers buffers   = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
         App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
         App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
@@ -1262,7 +1276,7 @@ struct AppSTCRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Renderer, evt.m_Path);
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
         App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
         App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
         if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
@@ -1288,7 +1302,7 @@ struct AppSTCRenderer
 
 void AppRenderRive(uint32_t width, uint32_t height)
 {
-    switch(rive::getRenderMode())
+    switch(rive::getRenderMode(g_app.m_Ctx))
     {
         case rive::MODE_TESSELLATION:
             AppTessellationRenderer::Frame(width, height);
@@ -1306,9 +1320,9 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
     g_app.m_PassAction.colors[0].value.g = backgroundColor[1];
     g_app.m_PassAction.colors[0].value.b = backgroundColor[2];
 
-    if (rive::getRenderMode() != renderMode)
+    if (rive::getRenderMode(g_app.m_Ctx) != renderMode)
     {
-        rive::setRenderMode(renderMode);
+        rive::setRenderMode(g_app.m_Ctx, renderMode);
 
         for (int i = 0; i < App::MAX_ARTBOARD_CONTEXTS; ++i)
         {
@@ -1316,7 +1330,7 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
         }
 
         rive::destroyRenderer(g_app.m_Renderer);
-        g_app.m_Renderer = rive::createRenderer();
+        g_app.m_Renderer = rive::createRenderer(g_app.m_Ctx);
     }
 
     rive::setClippingSupport(g_app.m_Renderer, g_app.m_DebugView == App::DEBUG_VIEW_NONE && clippingSupported);
@@ -1325,6 +1339,8 @@ void AppConfigure(rive::RenderMode renderMode, float contourQuality, float* back
 
 void AppShutdown()
 {
+    rive::destroyRenderer(g_app.m_Renderer);
+    rive::destroyContext(g_app.m_Ctx);
     sg_shutdown();
     glfwTerminate();
 }
@@ -1335,7 +1351,7 @@ void AppRun()
     int windowHeight         = 0;
     float dt                 = 0.0f;
     float contourQuality     = 0.8888888888888889f;
-    int renderModeChoice     = (int) rive::getRenderMode();
+    int renderModeChoice     = (int) rive::getRenderMode(g_app.m_Ctx);
     float mouseLastX         = 0.0f;
     float mouseLastY         = 0.0f;
     float backgroundColor[3] = { 0.25f, 0.25f, 0.25f };
