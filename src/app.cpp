@@ -1184,8 +1184,6 @@ struct AppSTCRenderer
         int vertexCount   = contourVertexBuffer->m_DataSize / (sizeof(float) * 2);
         int triangleCount = vertexCount - 5;
 
-        // printf("%d, %d\n", vertexCount, triangleCount);
-
         if (vertexCount < 5)
             return;
 
