@@ -60,24 +60,6 @@ namespace rive
     {
         HBuffer m_VertexBuffer;
         HBuffer m_IndexBuffer;
-        /*
-        union
-        {
-            struct
-            {
-                HBuffer m_ContourVertexBuffer;
-                HBuffer m_ContourIndexBuffer;
-                HBuffer m_CoverVertexBuffer;
-                HBuffer m_CoverIndexBuffer;
-            } m_StencilToCover;
-
-            struct
-            {
-                HBuffer m_VertexBuffer;
-                HBuffer m_IndexBuffer;
-            } m_Tessellation;
-        };
-        */
     };
 
     struct PaintData

@@ -24,118 +24,6 @@ namespace rive
         rgbaOut[3] = (float)((0xff000000 & colorIn) >> 24) / 255.0f;
     }
 
-    /*
-    static bool tooFar(const Vec2D& a, const Vec2D& b, float distTooFar)
-    {
-        return fmax(fabs(a[0] - b[0]), fabs(a[1] - b[1])) > distTooFar;
-    }
-
-    static void computeHull(const Vec2D& from,
-                            const Vec2D& fromOut,
-                            const Vec2D& toIn,
-                            const Vec2D& to,
-                            float t,
-                            Vec2D* hull)
-    {
-        Vec2D::lerp(hull[0], from, fromOut, t);
-        Vec2D::lerp(hull[1], fromOut, toIn, t);
-        Vec2D::lerp(hull[2], toIn, to, t);
-
-        Vec2D::lerp(hull[3], hull[0], hull[1], t);
-        Vec2D::lerp(hull[4], hull[1], hull[2], t);
-
-        Vec2D::lerp(hull[5], hull[3], hull[4], t);
-    }
-
-    static bool shouldSplitCubic(const Vec2D& from,
-                                 const Vec2D& fromOut,
-                                 const Vec2D& toIn,
-                                 const Vec2D& to,
-                                 float distTooFar)
-    {
-        Vec2D oneThird, twoThird;
-        Vec2D::lerp(oneThird, from, to, 1.0f / 3.0f);
-        Vec2D::lerp(twoThird, from, to, 2.0f / 3.0f);
-        return tooFar(fromOut, oneThird, distTooFar) || tooFar(toIn, twoThird, distTooFar);
-    }
-
-    static float cubicAt(float t, float a, float b, float c, float d)
-    {
-        float ti = 1.0f - t;
-        float value =
-            ti * ti * ti * a +
-            3.0f * ti * ti * t * b +
-            3.0f * ti * t * t * c +
-            t * t * t * d;
-        return value;
-    }
-
-    void segmentCubic(const Vec2D& from,
-                      const Vec2D& fromOut,
-                      const Vec2D& toIn,
-                      const Vec2D& to,
-                      float t1,
-                      float t2,
-                      float minSegmentLength,
-                      float distTooFar,
-                      float* vertices,
-                      uint32_t& verticesCount,
-                      PathLimits* pathLimits)
-    {
-
-        if (shouldSplitCubic(from, fromOut, toIn, to, distTooFar))
-        {
-            float halfT = (t1 + t2) / 2.0f;
-
-            Vec2D hull[6];
-            computeHull(from, fromOut, toIn, to, 0.5f, hull);
-
-            segmentCubic(from,
-                         hull[0],
-                         hull[3],
-                         hull[5],
-                         t1,
-                         halfT,
-                         minSegmentLength,
-                         distTooFar,
-                         vertices,
-                         verticesCount,
-                         pathLimits);
-            segmentCubic(hull[5],
-                         hull[4],
-                         hull[2],
-                         to,
-                         halfT,
-                         t2,
-                         minSegmentLength,
-                         distTooFar,
-                         vertices,
-                         verticesCount,
-                         pathLimits);
-        }
-        else
-        {
-            float length = Vec2D::distance(from, to);
-            if (length > minSegmentLength)
-            {
-                float x              = cubicAt(t2, from[0], fromOut[0], toIn[0], to[0]);
-                float y              = cubicAt(t2, from[1], fromOut[1], toIn[1], to[1]);
-                vertices[verticesCount * 2    ] = x;
-                vertices[verticesCount * 2 + 1] = y;
-                verticesCount++;
-
-                if (pathLimits)
-                {
-                    pathLimits->m_MinX = fmin(pathLimits->m_MinX, x);
-                    pathLimits->m_MinY = fmin(pathLimits->m_MinY, y);
-                    pathLimits->m_MaxX = fmax(pathLimits->m_MaxX, x);
-                    pathLimits->m_MaxY = fmax(pathLimits->m_MaxY, y);
-                }
-            }
-        }
-    }
-    */
-
     SharedRenderPaint::SharedRenderPaint()
     : m_Builder(0)
     , m_Data({})
@@ -215,144 +103,6 @@ namespace rive
         m_Builder->m_Stops.SetCapacity(0);
         delete m_Builder;
     }
-
-    /* Shared RenderPaint */
-
-    /*
-    void SharedRenderPath::addRenderPath(RenderPath* path, const Mat2D& transform)
-    {
-        PathDescriptor desc = {path, transform};
-
-        if (m_Paths.Full())
-        {
-            m_Paths.SetCapacity(m_Paths.Capacity() + 1);
-        }
-
-        m_Paths.Push(desc);
-    }
-
-    void SharedRenderPath::fillRule(FillRule value)
-    {
-        m_FillRule = value;
-    }
-
-    void SharedRenderPath::moveTo(float x, float y)
-    {
-        if (m_PathCommands.Full())
-        {
-            m_PathCommands.SetCapacity(m_PathCommands.Capacity() + 1);
-        }
-
-    #if PRINT_COMMANDS
-        printf("moveTo (%f,%f)\n", x, y);
-    #endif
-
-        m_PathCommands.Push({
-            .m_Command = TYPE_MOVE,
-            .m_X       = x,
-            .m_Y       = y
-        });
-    }
-
-    void SharedRenderPath::lineTo(float x, float y)
-    {
-        if (m_PathCommands.Full())
-        {
-            m_PathCommands.SetCapacity(m_PathCommands.Capacity() + 1);
-        }
-
-    #if PRINT_COMMANDS
-        printf("lineTo (%f,%f)\n", x, y);
-    #endif
-
-        m_PathCommands.Push({
-            .m_Command = TYPE_LINE,
-            .m_X       = x,
-            .m_Y       = y
-        });
-    }
-
-    void SharedRenderPath::cubicTo(float ox, float oy, float ix, float iy, float x, float y)
-    {
-        if (m_PathCommands.Full())
-        {
-            m_PathCommands.SetCapacity(m_PathCommands.Capacity() + 1);
-        }
-    #if PRINT_COMMANDS
-        printf("cubicTo (%f,%f,%f,%f,%f,%f)\n", ox, oy, ix, iy, x, y);
-    #endif
-
-        m_PathCommands.Push({
-            .m_Command = TYPE_CUBIC,
-            .m_X       = x,
-            .m_Y       = y,
-            .m_OX      = ox,
-            .m_OY      = oy,
-            .m_IX      = ix,
-            .m_IY      = iy,
-        });
-    }
-
-    void SharedRenderPath::close()
-    {
-        if (m_PathCommands.Full())
-        {
-            m_PathCommands.SetCapacity(m_PathCommands.Capacity() + 1);
-        }
-
-    #if PRINT_COMMANDS
-        printf("close\n");
-    #endif
-
-        m_PathCommands.Push({
-            .m_Command = TYPE_CLOSE
-        });
-    }
-    */
-
-    /*
-    SharedRenderPath::SharedRenderPath()
-    : m_ContourVertexCount(0)
-    , m_IsDirty(true)
-    , m_IsShapeDirty(true)
-    {
-        memset(m_ContourVertexData, 0, sizeof(m_ContourVertexData));
-    }
-
-    void SharedRenderPath::reset()
-    {
-        m_Paths.SetCapacity(0);
-        m_Paths.SetSize(0);
-        m_PathCommands.SetCapacity(0);
-        m_PathCommands.SetSize(0);
-        m_IsDirty = true;
-        m_IsShapeDirty = true;
-    }
-
-    bool SharedRenderPath::isShapeDirty()
-    {
-        bool dirty = m_IsShapeDirty;
-        if (dirty)
-        {
-            return true;
-        }
-
-        if (m_Paths.Size() > 0)
-        {
-            for (int i = 0; i < (int)m_Paths.Size(); ++i)
-            {
-                SharedRenderPath* sharedPath = (SharedRenderPath*) m_Paths[i].m_Path;
-                if (sharedPath->isShapeDirty())
-                {
-                    dirty = true;
-                    break;
-                }
-            }
-        }
-
-        return dirty;
-    }
-    */
 
     /* Shared Renderer */
     SharedRenderer::SharedRenderer()
@@ -591,34 +341,19 @@ namespace rive
     {
         DrawBuffers buffers  = {};
         SharedRenderer* r    = (SharedRenderer*) renderer;
-        HBuffer indexBuffer  = r->m_IndexBuffer;
-        HBuffer vertexBuffer = 0;
 
         if (g_RiveRenderMode == MODE_STENCIL_TO_COVER)
         {
-            StencilToCoverRenderPath* r = (StencilToCoverRenderPath*) path;
-            vertexBuffer = r->m_VertexBuffer;
+            StencilToCoverRenderPath* p = (StencilToCoverRenderPath*) path;
+            buffers.m_IndexBuffer       = r->m_IndexBuffer;
+            buffers.m_VertexBuffer      = p->m_VertexBuffer;
         }
-
-        buffers.m_IndexBuffer  = indexBuffer;
-        buffers.m_VertexBuffer = vertexBuffer;
-
-        /*
-        if (g_RiveRenderMode == MODE_TESSELLATION)
+        else if (g_RiveRenderMode == MODE_TESSELLATION)
         {
-            TessellationRenderPath* r             = (TessellationRenderPath*) path;
-            buffers.m_Tessellation.m_VertexBuffer = r->m_VertexBuffer;
-            buffers.m_Tessellation.m_IndexBuffer  = r->m_IndexBuffer;
+            TessellationRenderPath* p = (TessellationRenderPath*) path;
+            buffers.m_IndexBuffer     = p->m_IndexBuffer;
+            buffers.m_VertexBuffer    = p->m_VertexBuffer;
         }
-        else if (g_RiveRenderMode == MODE_STENCIL_TO_COVER)
-        {
-            StencilToCoverRenderPath* r                    = (StencilToCoverRenderPath*) path;
-            buffers.m_StencilToCover.m_ContourVertexBuffer = r->m_ContourVertexBuffer;
-            buffers.m_StencilToCover.m_ContourIndexBuffer  = r->m_ContourIndexBuffer;
-            buffers.m_StencilToCover.m_CoverVertexBuffer   = r->m_CoverVertexBuffer;
-            buffers.m_StencilToCover.m_CoverIndexBuffer    = r->m_CoverIndexBuffer;
-        }
-        */
 
         return buffers;
     }

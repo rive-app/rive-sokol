@@ -12,6 +12,7 @@ namespace rive
 {
     StencilToCoverRenderer::StencilToCoverRenderer()
     {
+        m_FullscreenPath = 0;
         /*
         m_FullscreenPath = new StencilToCoverRenderPath;
 

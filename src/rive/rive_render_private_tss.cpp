@@ -34,22 +34,15 @@ namespace rive
 
     void TessellationRenderPath::addContours(void* tess, const Mat2D& m)
     {
-        // m_IsShapeDirty = false;
-
-        /*
-        if (m_Paths.Size() > 0)
+        if (isContainer())
         {
-            for (int i = 0; i < (int) m_Paths.Size(); ++i)
+            for (int i = 0; i < m_SubPaths.size(); ++i)
             {
-                TessellationRenderPath* tessellationPath = (TessellationRenderPath*) m_Paths[i].m_Path;
-                if (tessellationPath)
-                {
-                    tessellationPath->addContours(tess, m_Paths[i].m_Transform);
-                }
+                TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_SubPaths[i].path();
+                sharedPath->addContours(tess, m_SubPaths[i].transform());
             }
             return;
         }
-        */
 
         const int numComponents = 2;
         const int stride        = sizeof(float) * numComponents;
@@ -57,7 +50,7 @@ namespace rive
         Mat2D identity;
         if (identity == m)
         {
-            // tessAddContour((TESStesselator*)tess, numComponents, m_ContourVertexData, stride, m_ContourVertexCount);
+            tessAddContour((TESStesselator*)tess, numComponents, &m_ContourVertices[4][0], stride, m_ContourVertices.size());
         }
         else
         {
@@ -68,38 +61,33 @@ namespace rive
             const float m4 = m[4];
             const float m5 = m[5];
 
-            /*
-            float transformBuffer[COUNTOUR_BUFFER_ELEMENT_COUNT * numComponents];
+            float transformBuffer[512 * numComponents]; // todo: dynamic array
 
-            for (int i = 0; i < m_ContourVertexCount * numComponents; i += numComponents)
+            rive::Vec2D* contourVertices = &m_ContourVertices[4];
+            int numContours              = m_ContourVertices.size() - 4;
+
+            for (int i = 0; i < numContours; i++)
             {
-                float x                = m_ContourVertexData[i];
-                float y                = m_ContourVertexData[i + 1];
-                transformBuffer[i    ] = m0 * x + m2 * y + m4;
-                transformBuffer[i + 1] = m1 * x + m3 * y + m5;
+                float x                  = contourVertices[i][0];
+                float y                  = contourVertices[i][1];
+                transformBuffer[i*2    ] = m0 * x + m2 * y + m4;
+                transformBuffer[i*2 + 1] = m1 * x + m3 * y + m5;
             }
-            */
 
-            // tessAddContour((TESStesselator*)tess, numComponents, transformBuffer, stride, m_ContourVertexCount);
+            tessAddContour((TESStesselator*) tess, numComponents, transformBuffer, stride, numContours);
         }
     }
 
     void TessellationRenderPath::updateContour(float contourError)
     {
-        /*
-        if (m_Paths.Size() > 0)
+        if (isContainer())
         {
-            for (int i=0; i < (int)m_Paths.Size(); i++)
+            for (int i = 0; i < m_SubPaths.size(); ++i)
             {
-                TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_Paths[i].m_Path;
+                TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_SubPaths[i].path();
                 sharedPath->updateContour(contourError);
             }
         }
-        */
-
-        //m_IsDirty      = m_IsDirty      || contourError != m_ContourError;
-        //m_IsShapeDirty = m_IsShapeDirty || contourError != m_ContourError;
-        m_ContourError = contourError;
 
         if (isDirty())
         {
@@ -109,12 +97,12 @@ namespace rive
 
     void TessellationRenderPath::updateTesselation(float contourError)
     {
-        updateContour(contourError);
-
         if (!isDirty())
         {
             return;
         }
+
+        updateContour(contourError);
 
         TESStesselator* tess = tessNewTess(0);
 
