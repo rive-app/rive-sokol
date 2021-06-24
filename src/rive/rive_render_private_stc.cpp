@@ -12,19 +12,14 @@ namespace rive
 {
     StencilToCoverRenderer::StencilToCoverRenderer()
     {
-        m_FullscreenPath = 0;
-        /*
-        m_FullscreenPath = new StencilToCoverRenderPath;
-
-        m_FullscreenPath->m_Limits = {
-            .m_MinX = -1.0f,
-            .m_MinY = -1.0f,
-            .m_MaxX =  1.0f,
-            .m_MaxY =  1.0f,
+        const float coverVertices[] = {
+            -1.0f, -1.0f,  1.0f, -1.0f,
+             1.0f,  1.0f, -1.0f,  1.0f,
         };
 
-        m_FullscreenPath->updateBuffers();
-        */
+        m_FullscreenPath                 = new StencilToCoverRenderPath;
+        m_FullscreenPath->m_VertexBuffer = requestBuffer(m_FullscreenPath->m_VertexBuffer,
+            BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertices, sizeof(coverVertices));
     }
 
     StencilToCoverRenderer::~StencilToCoverRenderer()

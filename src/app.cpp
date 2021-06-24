@@ -590,11 +590,10 @@ bool AppBootstrap(int argc, char const *argv[])
     // Rive setup
     ////////////////////////////////////////////////////
     rive::setBufferCallbacks(AppRequestBufferCallback, AppDestroyBufferCallback);
-    //rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
-    rive::setRenderMode(rive::MODE_TESSELLATION);
+    rive::setRenderMode(rive::MODE_STENCIL_TO_COVER);
+    // rive::setRenderMode(rive::MODE_TESSELLATION);
     g_app.m_Renderer = rive::createRenderer();
-    // rive::setClippingSupport(g_app.m_Renderer, true);
-    rive::setClippingSupport(g_app.m_Renderer, false);
+    rive::setClippingSupport(g_app.m_Renderer, true);
 
     for (int i = 1; i < argc; ++i)
     {
