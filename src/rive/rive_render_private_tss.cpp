@@ -84,83 +84,6 @@ namespace rive
         }
     }
 
-    /*
-    void TessellationRenderPath::computeContour()
-    {
-        const float minSegmentLength = m_ContourError * m_ContourError;
-        const float distTooFar       = m_ContourError;
-
-        m_IsDirty       = false;
-        float penX      = 0.0f;
-        float penY      = 0.0f;
-        float penDownX  = 0.0f;
-        float penDownY  = 0.0f;
-        float isPenDown = false;
-
-        m_ContourVertexCount = 0;
-
-        #define ADD_VERTEX(x,y) \
-            { \
-                m_ContourVertexData[m_ContourVertexCount * 2]     = x; \
-                m_ContourVertexData[m_ContourVertexCount * 2 + 1] = y; \
-                m_ContourVertexCount++; \
-            }
-
-        #define PEN_DOWN() \
-            if (!isPenDown) \
-            { \
-                isPenDown = true; \
-                penDownX = penX; \
-                penDownY = penY; \
-                ADD_VERTEX(penX, penY); \
-            }
-
-        for (int i=0; i < (int)m_PathCommands.Size(); i++)
-        {
-            const PathCommand& pc = m_PathCommands[i];
-            switch(pc.m_Command)
-            {
-                case TYPE_MOVE:
-                    penX = pc.m_X;
-                    penY = pc.m_Y;
-                    break;
-                case TYPE_LINE:
-                    PEN_DOWN()
-                    ADD_VERTEX(pc.m_X, pc.m_Y);
-                    break;
-                case TYPE_CUBIC:
-                    PEN_DOWN()
-                    segmentCubic(
-                        Vec2D(penX, penY),
-                        Vec2D(pc.m_OX, pc.m_OY),
-                        Vec2D(pc.m_IX, pc.m_IY),
-                        Vec2D(pc.m_X, pc.m_Y),
-                        0.0f,
-                        1.0f,
-                        minSegmentLength,
-                        distTooFar,
-                        m_ContourVertexData,
-                        m_ContourVertexCount,
-                        0);
-                    penX = pc.m_X;
-                    penY = pc.m_Y;
-                    break;
-                case TYPE_CLOSE:
-                    if (isPenDown)
-                    {
-                        penX      = penDownX;
-                        penY      = penDownY;
-                        isPenDown = false;
-                    }
-                    break;
-            }
-        }
-
-        #undef ADD_VERTEX
-        #undef PEN_DOWN
-    }
-    */
-
     void TessellationRenderPath::updateContour(float contourError)
     {
         /*
@@ -212,10 +135,6 @@ namespace rive
 
             m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) tessVertices, tessVerticesCount * sizeof(float) * vertexSize);
             m_IndexBuffer  = requestBuffer(m_IndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) tessElements, tessElementsCount * sizeof(int) * polySize);
-        }
-        else
-        {
-            printf("Unable to tessellate path %p\n", this);
         }
 
         tessDeleteTess(tess);

@@ -137,27 +137,11 @@ namespace rive
 
     /* StencilToCoverRenderPath impl */
     StencilToCoverRenderPath::StencilToCoverRenderPath()
-    : m_VertexBuffer(0)
-    // : m_ContourIndexCount(0)
-    /*
-    : m_ContourVertexBuffer(0)
-    , m_ContourIndexBuffer(0)
-    , m_CoverVertexBuffer(0)
-    , m_CoverIndexBuffer(0)
-    , m_ContourError(0.0f)
-    */
-    {
-    }
+    : m_VertexBuffer(0) {}
 
     StencilToCoverRenderPath::~StencilToCoverRenderPath()
     {
         destroyBuffer(m_VertexBuffer);
-        /*
-        destroyBuffer(m_ContourVertexBuffer);
-        destroyBuffer(m_ContourIndexBuffer);
-        destroyBuffer(m_CoverVertexBuffer);
-        destroyBuffer(m_CoverIndexBuffer);
-        */
     }
 
     void StencilToCoverRenderPath::fillRule(FillRule value)
@@ -165,183 +149,26 @@ namespace rive
         m_FillRule = value;
     }
 
-    /*
-    void StencilToCoverRenderPath::computeContour()
-    {
-        const float minSegmentLength = m_ContourError * m_ContourError;
-        const float distTooFar       = m_ContourError;
-
-        m_IsDirty              = false;
-        m_ContourIndexCount    = 0;
-        m_ContourVertexCount   = 1;
-        m_ContourVertexData[0] = 0.0f;
-        m_ContourVertexData[1] = 0.0f;
-
-        m_Limits = {
-            .m_MinX =  FLT_MAX,
-            .m_MinY =  FLT_MAX,
-            .m_MaxX = -FLT_MAX,
-            .m_MaxY = -FLT_MAX,
-        };
-
-        float penX          = 0.0f;
-        float penY          = 0.0f;
-        float penDownX      = 0.0f;
-        float penDownY      = 0.0f;
-        float isPenDown     = false;
-        int penDownIndex    = 1;
-        int nextVertexIndex = 1;
-
-        #define ADD_VERTEX(x,y) \
-            { \
-                m_ContourVertexData[m_ContourVertexCount * 2]     = x; \
-                m_ContourVertexData[m_ContourVertexCount * 2 + 1] = y; \
-                m_Limits.m_MinX = fmin(m_Limits.m_MinX, x); \
-                m_Limits.m_MinY = fmin(m_Limits.m_MinY, y); \
-                m_Limits.m_MaxX = fmax(m_Limits.m_MaxX, x); \
-                m_Limits.m_MaxY = fmax(m_Limits.m_MaxY, y); \
-                m_ContourVertexCount++; \
-            }
-
-        #define ADD_TRIANGLE(p0,p1,p2) \
-            { \
-                m_ContourIndexData[m_ContourIndexCount++] = p0; \
-                m_ContourIndexData[m_ContourIndexCount++] = p1; \
-                m_ContourIndexData[m_ContourIndexCount++] = p2; \
-            }
-
-        #define PEN_DOWN() \
-            if (!isPenDown) \
-            { \
-                isPenDown = true; \
-                penDownX = penX; \
-                penDownY = penY; \
-                ADD_VERTEX(penX, penY); \
-                penDownIndex = nextVertexIndex; \
-                nextVertexIndex++; \
-            }
-
-        for (int i=0; i < m_PathCommands.Size(); i++)
-        {
-            const PathCommand& pc = m_PathCommands[i];
-            switch(pc.m_Command)
-            {
-                case TYPE_MOVE:
-                    penX = pc.m_X;
-                    penY = pc.m_Y;
-                    break;
-                case TYPE_LINE:
-                    PEN_DOWN();
-                    ADD_VERTEX(pc.m_X, pc.m_Y);
-                    ADD_TRIANGLE(0, nextVertexIndex - 1, nextVertexIndex++);
-                    break;
-                case TYPE_CUBIC:
-                {
-                    PEN_DOWN();
-                    const int size = m_ContourVertexCount;
-                    segmentCubic(
-                        Vec2D(penX, penY),
-                        Vec2D(pc.m_OX, pc.m_OY),
-                        Vec2D(pc.m_IX, pc.m_IY),
-                        Vec2D(pc.m_X, pc.m_Y),
-                        0.0f,
-                        1.0f,
-                        minSegmentLength,
-                        distTooFar,
-                        m_ContourVertexData,
-                        m_ContourVertexCount,
-                        &m_Limits);
-
-                    const int addedVertices = m_ContourVertexCount - size;
-                    for (int i = 0; i < addedVertices; ++i)
-                    {
-                        ADD_TRIANGLE(0, nextVertexIndex - 1, nextVertexIndex++);
-                    }
-
-                    penX = pc.m_X;
-                    penY = pc.m_Y;
-                } break;
-                case TYPE_CLOSE:
-                    if (isPenDown)
-                    {
-                        penX      = penDownX;
-                        penY      = penDownY;
-                        isPenDown = false;
-
-                        if (m_ContourIndexCount > 0)
-                        {
-                            // Add the first vertex back to the indices to draw the
-                            // close.
-                            const int lastIndex = m_ContourIndexData[m_ContourIndexCount - 1];
-                            ADD_TRIANGLE(0, lastIndex, penDownIndex);
-                        }
-                    }
-                    break;
-            }
-        }
-
-        // Always close the fill...
-        if (isPenDown)
-        {
-            const int lastIndex = m_ContourIndexData[m_ContourIndexCount - 1];
-            ADD_TRIANGLE(0, lastIndex, penDownIndex);
-        }
-
-        m_ContourVertexData[0] = m_Limits.m_MinX;
-        m_ContourVertexData[1] = m_Limits.m_MinY;
-
-        #undef ADD_VERTEX
-        #undef PEN_DOWN
-    }
-    */
-
     void StencilToCoverRenderPath::updateBuffers(SharedRenderer* renderer)
     {
-        const float coverVertexData[] = {
-            m_ContourBounds.minX, m_ContourBounds.minY, m_ContourBounds.maxX, m_ContourBounds.minY,
-            m_ContourBounds.maxX, m_ContourBounds.maxY, m_ContourBounds.minX, m_ContourBounds.maxY,
-        };
-
-        const int coverIndexData[] = {
-            0, 1, 2,
-            2, 3, 0,
-        };
-
         std::size_t vertexCount = m_ContourVertices.size();
         renderer->updateIndexBuffer(vertexCount - 3);
-
         m_VertexBuffer = requestBuffer(m_VertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, &m_ContourVertices[0][0], vertexCount * sizeof(float) * 2.0f);
-
-        /*
-        m_ContourVertexBuffer = requestBuffer(m_ContourVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, &m_ContourVertices.begin(), m_ContourVertices.size(); * sizeof(float) * 2);
-        m_ContourIndexBuffer  = requestBuffer(m_ContourIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, m_ContourIndexData, m_ContourIndexCount * sizeof(int));
-        m_CoverVertexBuffer   = requestBuffer(m_CoverVertexBuffer, BUFFER_TYPE_VERTEX_BUFFER, (void*) coverVertexData, sizeof(coverVertexData));
-        m_CoverIndexBuffer    = requestBuffer(m_CoverIndexBuffer, BUFFER_TYPE_INDEX_BUFFER, (void*) coverIndexData, sizeof(coverIndexData));
-        */
     }
 
     void StencilToCoverRenderPath::stencil(SharedRenderer* renderer, const Mat2D& transform, unsigned int idx, bool isEvenOdd, bool isClipping)
     {
-        /*
-        if (m_Paths.Size() > 0)
+        if (isContainer())
         {
-            for (int i = 0; i < m_Paths.Size(); ++i)
+            for (int i = 0; i < m_SubPaths.size(); ++i)
             {
-                StencilToCoverRenderPath* stcPath = (StencilToCoverRenderPath*) m_Paths[i].m_Path;
-                if (stcPath)
-                {
-                    Mat2D stcPathTransform;
-                    Mat2D::multiply(stcPathTransform, transform, m_Paths[i].m_Transform);
-                    stcPath->stencil(renderer, stcPathTransform, idx++, isEvenOdd, isClipping);
-                }
+                Mat2D stcPathTransform;
+                Mat2D::multiply(stcPathTransform, transform, m_SubPaths[i].transform());
+                StencilToCoverRenderPath* stcPath = (StencilToCoverRenderPath*) m_SubPaths[i].path();
+                stcPath->stencil(renderer, stcPathTransform, idx++, isEvenOdd, isClipping);
             }
             return;
         }
-        */
-
-        float currentContourError = getContourError((HRenderer) renderer);
-        //m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
-        //m_ContourError            = currentContourError;
 
         if (isDirty())
         {
@@ -363,34 +190,18 @@ namespace rive
 
     void StencilToCoverRenderPath::cover(SharedRenderer* renderer, const Mat2D transform, const Mat2D transformLocal, bool isClipping)
     {
-        /*
-        if (m_Paths.Size() > 0)
+        if (isContainer())
         {
-            for (int i = 0; i < m_Paths.Size(); ++i)
+            for (int i = 0; i < m_SubPaths.size(); ++i)
             {
-                StencilToCoverRenderPath* stcPath = (StencilToCoverRenderPath*) m_Paths[i].m_Path;
-                if (stcPath)
-                {
-                    Mat2D stcWorldTransform;
-                    Mat2D::multiply(stcWorldTransform, transform, m_Paths[i].m_Transform);
-                    stcPath->cover(renderer, stcWorldTransform, m_Paths[i].m_Transform, isClipping);
-                }
+                Mat2D stcWorldTransform;
+                Mat2D::multiply(stcWorldTransform, transform, m_SubPaths[i].transform());
+
+                StencilToCoverRenderPath* stcPath = (StencilToCoverRenderPath*) m_SubPaths[i].path();
+                stcPath->cover(renderer, stcWorldTransform, m_SubPaths[i].transform(), isClipping);
             }
             return;
         }
-        */
-
-        float currentContourError = getContourError((HRenderer) renderer);
-        //m_IsDirty                 = m_IsDirty || currentContourError != m_ContourError;
-        //m_ContourError            = currentContourError;
-
-        /*
-        if (isDirty())
-        {
-            computeContour();
-            updateBuffers();
-        }
-        */
 
         PathDrawEvent evt = {
             .m_Type           = EVENT_DRAW_COVER,
