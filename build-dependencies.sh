@@ -62,10 +62,11 @@ dep_rive()
         pushd . &>/dev/null
         cd rive-cpp
         git checkout .
-        git apply --ignore-space-change ../../../third-party/rive-cpp.patch
+        git checkout low_level_rendering
+        # git apply --ignore-space-change ../../../third-party/rive-cpp.patch
 
         cd build
-        premake5 gmake2
+        premake5 gmake2 --with-low-level-rendering
         make config=${BUILD_CONFIG} -j7
         popd &>/dev/null
     fi

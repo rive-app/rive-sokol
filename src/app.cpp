@@ -690,7 +690,6 @@ bool AppBootstrap(int argc, char const *argv[])
     imguiPipelineDesc.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
     imguiPipelineDesc.colors[0].write_mask           = SG_COLORMASK_RGB;
     g_app.m_ImguiPipeline                            = sg_make_pipeline(&imguiPipelineDesc);
-
     return true;
 }
 
@@ -848,7 +847,7 @@ static void DebugViewContour(App::GpuBuffer* vxBuffer, App::GpuBuffer* ixBuffer,
     sg_apply_bindings(&bindings);
     sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &vsUniformsRange);
     sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &fsUniformsRange);
-    sg_draw(0, numElements, 1);
+    sg_draw(6, numElements, 1);
 }
 
 struct AppTessellationRenderer
@@ -991,9 +990,9 @@ struct AppTessellationRenderer
 
     void DrawPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, evt.m_Path);
-        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_Tessellation.m_VertexBuffer;
-        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_Tessellation.m_IndexBuffer;
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
@@ -1035,9 +1034,9 @@ struct AppTessellationRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, evt.m_Path);
-        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_Tessellation.m_VertexBuffer;
-        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_Tessellation.m_IndexBuffer;
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* vertexBuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* indexBuffer     = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(vertexBuffer) || !IS_BUFFER_VALID(indexBuffer))
         {
@@ -1088,7 +1087,8 @@ struct AppSTCRenderer
                     else obj.StencilPass(evt);
                     break;
                 case rive::EVENT_DRAW_COVER:
-                    obj.CoverPass(evt);
+                    if (g_app.m_DebugView == App::DEBUG_VIEW_NONE)
+                        obj.CoverPass(evt);
                     break;
                 case rive::EVENT_CLIPPING_BEGIN:
                     obj.BeginClipping(evt);
@@ -1156,9 +1156,9 @@ struct AppSTCRenderer
 
     void StencilPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Ctx, evt.m_Path);
-        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourVertexBuffer;
-        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourIndexBuffer;
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(contourVertexBuffer) ||
             !IS_BUFFER_VALID(contourIndexBuffer))
@@ -1195,19 +1195,25 @@ struct AppSTCRenderer
         bindings.vertex_buffers[0] = contourVertexBuffer->m_Handle;
         bindings.index_buffer      = contourIndexBuffer->m_Handle;
 
+        int vertexCount   = contourVertexBuffer->m_DataSize / (sizeof(float) * 2);
+        int triangleCount = vertexCount - 5;
+
+        if (vertexCount < 5)
+            return;
+
         rive::Mat2D transformWorld  = evt.m_TransformWorld;
         Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
         sg_apply_pipeline(pipeline);
         sg_apply_bindings(&bindings);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
-        sg_draw(0, contourIndexBuffer->m_DataSize / sizeof(int), 1);
+        sg_draw(6, triangleCount * 3, 1);
     }
 
     void CoverPass(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers   = rive::getDrawBuffers(g_app.m_Ctx, evt.m_Path);
-        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_CoverVertexBuffer;
-        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_CoverIndexBuffer;
+        const rive::DrawBuffers buffers   = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* coverVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* coverIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
 
         if (!IS_BUFFER_VALID(coverVertexBuffer) ||
             !IS_BUFFER_VALID(coverIndexBuffer))
@@ -1270,9 +1276,9 @@ struct AppSTCRenderer
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
-        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Ctx, evt.m_Path);
-        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourVertexBuffer;
-        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_StencilToCover.m_ContourIndexBuffer;
+        const rive::DrawBuffers buffers     = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
+        App::GpuBuffer* contourVertexBuffer = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        App::GpuBuffer* contourIndexBuffer  = (App::GpuBuffer*) buffers.m_IndexBuffer;
         if (IS_BUFFER_VALID(contourVertexBuffer) && IS_BUFFER_VALID(contourIndexBuffer))
         {
             const rive::PaintData paintData = rive::getPaintData(m_Paint);
@@ -1286,7 +1292,7 @@ struct AppSTCRenderer
             DebugViewContour(
                 contourVertexBuffer,
                 contourIndexBuffer,
-                contourIndexBuffer->m_DataSize / sizeof(int),
+                contourIndexBuffer->m_DataSize / sizeof(int) - 5,
                 m_VsUniforms,
                 fsContourParams);
         }

@@ -87,8 +87,10 @@ else
     tools_setup
     platform_setup
     ./build-dependencies.sh $OPTION1
-    build_assets
-    make -j7
+    if [ "$OPTION1" != "deps" ]; then
+        build_assets
+        make -j7
+    fi
 fi
 
 echo Done building.
