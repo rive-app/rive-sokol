@@ -3,8 +3,8 @@
 
 #include <jc/array.h>
 
-#include <artboard.hpp>
-#include <contour_render_path.hpp>
+#include <rive/artboard.hpp>
+#include <rive/contour_render_path.hpp>
 
 #include "rive/rive_render_api.h"
 #include "rive/rive_render_private.h"

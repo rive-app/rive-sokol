@@ -56,6 +56,7 @@ namespace rive
         void radialGradient(float sx, float sy, float ex, float ey) override;
         void addStop(unsigned int color, float stop)                override;
         void completeGradient()                                     override;
+        void invalidateStroke()                                     override {}
         inline RenderPaintStyle      getStyle()  { return m_Style; }
         inline bool                  isVisible() { return m_IsVisible; }
 

@@ -14,9 +14,9 @@
 #include <jc/hashtable.h>
 #include <linmath.h>
 
-#include <animation/linear_animation_instance.hpp>
-#include <artboard.hpp>
-#include <file.hpp>
+#include <rive/animation/linear_animation_instance.hpp>
+#include <rive/artboard.hpp>
+#include <rive/file.hpp>
 
 #include "rive/rive_render_api.h"
 #include "shaders.glsl.h"
