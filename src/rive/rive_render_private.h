@@ -42,27 +42,37 @@ namespace rive
         void*           m_BufferCbUserData;
     };
 
+    class SharedRenderer;
+    class SharedRenderPath;
     class SharedRenderPaint : public RenderPaint
     {
     public:
         SharedRenderPaint();
+        ~SharedRenderPaint();
         void color(unsigned int value)                              override;
-        void style(RenderPaintStyle value)                          override { m_Style = value; }
-        void thickness(float value)                                 override {}
-        void join(StrokeJoin value)                                 override {}
-        void cap(StrokeCap value)                                   override {}
+        void style(RenderPaintStyle value)                          override;
+        void thickness(float value)                                 override { m_StrokeThickness = value; }
+        void join(StrokeJoin value)                                 override { m_StrokeJoin      = value; }
+        void cap(StrokeCap value)                                   override { m_StrokeCap       = value; }
         void blendMode(BlendMode value)                             override {}
         void linearGradient(float sx, float sy, float ex, float ey) override;
         void radialGradient(float sx, float sy, float ex, float ey) override;
         void addStop(unsigned int color, float stop)                override;
         void completeGradient()                                     override;
-        void invalidateStroke()                                     override {}
-        inline RenderPaintStyle      getStyle()  { return m_Style; }
-        inline bool                  isVisible() { return m_IsVisible; }
+        void invalidateStroke()                                     override;
+        inline RenderPaintStyle getStyle()  { return m_Style; }
+        inline bool             isVisible() { return m_IsVisible; }
+
+        void drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path);
 
         SharedRenderPaintBuilder* m_Builder;
+        ContourStroke*            m_Stroke;
         PaintData                 m_Data;
         RenderPaintStyle          m_Style;
+        float                     m_StrokeThickness;
+        StrokeJoin                m_StrokeJoin;
+        StrokeCap                 m_StrokeCap;
+        bool                      m_StrokeDirty;
         bool                      m_IsVisible;
     };
 
@@ -71,6 +81,8 @@ namespace rive
     public:
         Context* m_Context;
         SharedRenderPath(Context* ctx);
+        void renderStroke(SharedRenderer* renderer, ContourStroke* stroke,
+            const Mat2D& transform, const Mat2D& localTransform = Mat2D::identity());
     };
 
     class SharedRenderer : public Renderer

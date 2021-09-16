@@ -85,6 +85,8 @@
 */
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stddef.h>
 #if !defined(SOKOL_SHDC_ALIGN)
   #if defined(_MSC_VER)
     #define SOKOL_SHDC_ALIGN(a) __declspec(align(a))
@@ -401,7 +403,7 @@ static inline const sg_shader_desc* rive_debug_contour_shader_desc(sg_backend ba
       desc.fs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
       desc.fs.uniform_blocks[0].uniforms[0].array_count = 2;
       desc.label = "rive_debug_contour_shader";
-    };
+    }
     return &desc;
   }
   return 0;
@@ -426,7 +428,7 @@ static inline const sg_shader_desc* rive_shader_shader_desc(sg_backend backend) 
       desc.fs.uniform_blocks[0].uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
       desc.fs.uniform_blocks[0].uniforms[0].array_count = 34;
       desc.label = "rive_shader_shader";
-    };
+    }
     return &desc;
   }
   return 0;

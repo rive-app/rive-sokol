@@ -113,8 +113,9 @@ namespace rive
 
     void StencilToCoverRenderer::drawPath(RenderPath* path, RenderPaint* paint)
     {
-        StencilToCoverRenderPath* p = (StencilToCoverRenderPath*) path;
-        SharedRenderPaint*       rp = (SharedRenderPaint*) paint;
+        StencilToCoverRenderPath* p  = (StencilToCoverRenderPath*) path;
+        SharedRenderPath*       srph = (SharedRenderPath*) path;
+        SharedRenderPaint*       rp  = (SharedRenderPaint*) paint;
 
         if (rp->getStyle() != RenderPaintStyle::fill || !rp->isVisible())
         {
@@ -129,7 +130,9 @@ namespace rive
         setPaint(rp);
         bool isEvenOdd = p->fillRule() == FillRule::evenOdd;
         p->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
-        p->cover(this, m_Transform, Mat2D(), m_IsClipping);
+        //p->cover(this, m_Transform, Mat2D(), m_IsClipping);
+
+        rp->drawPaint(this, m_Transform, srph);
     }
 
     /* StencilToCoverRenderPath impl */

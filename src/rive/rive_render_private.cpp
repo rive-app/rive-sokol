@@ -5,6 +5,7 @@
 
 #include <rive/artboard.hpp>
 #include <rive/contour_render_path.hpp>
+#include <rive/contour_stroke.hpp>
 
 #include "rive/rive_render_api.h"
 #include "rive/rive_render_private.h"
@@ -23,6 +24,126 @@ namespace rive
     : m_Builder(0)
     , m_Data({})
     {}
+
+    SharedRenderPaint::~SharedRenderPaint()
+    {
+        if (m_Builder != 0)
+        {
+            delete m_Builder;
+        }
+        if (m_Stroke != 0)
+        {
+            delete m_Builder;
+        }
+    }
+
+    void SharedRenderPaint::style(RenderPaintStyle value)
+    {
+        m_Style = value;
+
+        if (m_Stroke != 0)
+        {
+            delete m_Stroke;
+        }
+
+        if (m_Style == RenderPaintStyle::stroke)
+        {
+            m_Stroke = new ContourStroke();
+            m_StrokeDirty = true;
+            /*
+            if (m_StrokeBuffer != 0)
+            {
+                glDeleteBuffers(1, &m_StrokeBuffer);
+            }
+            glGenBuffers(1, &m_StrokeBuffer);
+            */
+        }
+        else
+        {
+            m_Stroke = 0;
+            m_StrokeDirty = false;
+        }
+    }
+
+    void SharedRenderPaint::invalidateStroke()
+    {
+        if (m_Stroke != 0)
+        {
+            m_StrokeDirty = true;
+        }
+    }
+
+    void SharedRenderPaint::drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path)
+    {
+        if (m_Stroke != 0)
+        {
+            if (m_StrokeDirty)
+            {
+                static Mat2D identity;
+                m_Stroke->reset();
+                path->extrudeStroke(m_Stroke,
+                                    m_StrokeJoin,
+                                    m_StrokeCap,
+                                    m_StrokeThickness / 2.0f,
+                                    identity);
+                m_StrokeDirty = false;
+            }
+            const std::vector<Vec2D>& strip = m_Stroke->triangleStrip();
+            size_t size = strip.size();
+            if (size == 0)
+            {
+                return;
+            }
+            m_Stroke->resetRenderOffset();
+            path->renderStroke(renderer, m_Stroke, transform);
+        }
+        else
+        {
+            // NO GO
+            // p->cover(this, m_Transform, Mat2D(), m_IsClipping);
+        }
+
+        /*
+        if (m_Stroke != nullptr)
+        {
+            if (m_StrokeDirty)
+            {
+                static Mat2D identity;
+                m_Stroke->reset();
+                path->extrudeStroke(m_Stroke,
+                                    m_StrokeJoin,
+                                    m_StrokeCap,
+                                    m_StrokeThickness / 2.0f,
+                                    identity);
+                m_StrokeDirty = false;
+            }
+
+            const std::vector<Vec2D>& strip = m_Stroke->triangleStrip();
+            auto size = strip.size();
+            if (size == 0)
+            {
+                return;
+            }
+
+            glBindBuffer(GL_ARRAY_BUFFER, m_StrokeBuffer);
+            glBufferData(GL_ARRAY_BUFFER,
+                         size * 2 * sizeof(float),
+                         &strip[0][0],
+                         GL_DYNAMIC_DRAW);
+
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * 4, (void*)0);
+
+            m_Stroke->resetRenderOffset();
+            path->renderStroke(m_Stroke, renderer, transform);
+        }
+        else
+        {
+            path->cover(renderer, transform);
+        }
+        */
+
+    }
 
     void SharedRenderPaint::color(unsigned int value)
     {
@@ -103,6 +224,81 @@ namespace rive
     SharedRenderPath::SharedRenderPath(Context* ctx)
     : m_Context(ctx)
     {}
+
+    void SharedRenderPath::renderStroke(SharedRenderer* renderer, ContourStroke* stroke,
+        const Mat2D& transform, const Mat2D& localTransform)
+    {
+        if (isContainer())
+        {
+            for (size_t i = 0; i < m_SubPaths.size(); ++i)
+            {
+                ((SharedRenderPath*)m_SubPaths[i].path())->renderStroke(renderer, stroke, transform, localTransform);
+            }
+            return;
+        }
+
+        size_t start, end;
+        stroke->nextRenderOffset(start, end);
+
+        /*
+        if (isContainer())
+        {
+            for (auto& subPath : m_SubPaths)
+            {
+                reinterpret_cast<OpenGLRenderPath*>(subPath.path())
+                    ->renderStroke(stroke, renderer, transform, localTransform);
+            }
+            return;
+        }
+
+        {
+            float m4[16] = {transform[0],
+                            transform[1],
+                            0.0,
+                            0.0,
+                            transform[2],
+                            transform[3],
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            0.0,
+                            transform[4],
+                            transform[5],
+                            0.0,
+                            1.0};
+
+            glUniformMatrix4fv(renderer->transformUniformIndex(), 1, GL_FALSE, m4);
+        }
+        {
+            float m4[16] = {localTransform[0],
+                            localTransform[1],
+                            0.0,
+                            0.0,
+                            localTransform[2],
+                            localTransform[3],
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            0.0,
+                            localTransform[4],
+                            localTransform[5],
+                            0.0,
+                            1.0};
+
+            glUniformMatrix4fv(
+                renderer->shapeTransformUniformIndex(), 1, GL_FALSE, m4);
+        }
+
+        std::size_t start, end;
+        stroke->nextRenderOffset(start, end);
+
+        glDrawArrays(GL_TRIANGLE_STRIP, start, end - start);
+        */
+    }
 
     /* Shared Renderer */
     SharedRenderer::SharedRenderer()
