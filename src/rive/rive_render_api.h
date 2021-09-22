@@ -38,10 +38,11 @@ namespace rive
         EVENT_DRAW             = 1,
         EVENT_DRAW_STENCIL     = 2,
         EVENT_DRAW_COVER       = 3,
-        EVENT_SET_PAINT        = 4,
-        EVENT_CLIPPING_BEGIN   = 5,
-        EVENT_CLIPPING_END     = 6,
-        EVENT_CLIPPING_DISABLE = 7,
+        EVENT_DRAW_STROKE      = 4,
+        EVENT_SET_PAINT        = 5,
+        EVENT_CLIPPING_BEGIN   = 6,
+        EVENT_CLIPPING_END     = 7,
+        EVENT_CLIPPING_DISABLE = 8,
     };
 
     struct PathDrawEvent

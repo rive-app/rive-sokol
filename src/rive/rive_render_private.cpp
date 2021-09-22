@@ -94,6 +94,10 @@ namespace rive
             {
                 return;
             }
+
+            m_StrokeBuffer = renderer->m_Context->m_RequestBufferCb(m_StrokeBuffer, BUFFER_TYPE_VERTEX_BUFFER,
+                (void*) &strip[0][0], size * 2 * sizeof(float), renderer->m_Context->m_BufferCbUserData);
+
             m_Stroke->resetRenderOffset();
             path->renderStroke(renderer, m_Stroke, transform);
         }
@@ -239,6 +243,12 @@ namespace rive
 
         size_t start, end;
         stroke->nextRenderOffset(start, end);
+
+        PathDrawEvent evt = {
+            .m_Type  = EVENT_DRAW_STROKE,
+        };
+
+        renderer->pushDrawEvent(evt);
 
         /*
         if (isContainer())
