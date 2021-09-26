@@ -63,8 +63,7 @@ namespace rive
         void completeGradient()                                     override;
         void invalidateStroke()                                     override;
         bool isVisible();
-        inline RenderPaintStyle getStyle()  { return m_Style; }
-
+        RenderPaintStyle getStyle();
         void virtual drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path);
 
         Context*                  m_Context;

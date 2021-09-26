@@ -52,6 +52,12 @@ namespace rive
         }
     }
 
+
+    RenderPaintStyle SharedRenderPaint::getStyle()
+    {
+        return m_Style;
+    }
+
     void SharedRenderPaint::thickness(float value)
     {
         m_StrokeThickness = value;
