@@ -193,7 +193,7 @@ static void UpdateArtboardCloneCount(App::ArtboardContext& ctx)
         }
         else
         {
-            for (size_t i = ctx.m_CloneCount; i < ctx.m_Artboards.Size(); ++i)
+            for (int i = ctx.m_CloneCount; i < (int) ctx.m_Artboards.Size(); ++i)
             {
                 if (ctx.m_Artboards[i].m_Artboard)
                 {
@@ -754,7 +754,7 @@ static void FillPaintData(rive::HRenderPaint paint, fs_paint_t& uniform)
     const rive::PaintData paintData = rive::getPaintData(paint);
 
     //  Note: Have to use vectors for the stops here aswell, doesn't work otherwise (sokol issue?)
-    for (size_t i = 0; i < paintData.m_StopCount; ++i)
+    for (int i = 0; i < (int) paintData.m_StopCount; ++i)
     {
         uniform.stops[i][0] = paintData.m_Stops[i];
     }
@@ -879,7 +879,7 @@ struct AppTessellationRenderer
     static void Frame(uint32_t width, uint32_t height)
     {
         AppTessellationRenderer obj(width, height);
-        for (size_t i = 0; i < rive::getDrawEventCount(g_app.m_Renderer); ++i)
+        for (int i = 0; i < (int) rive::getDrawEventCount(g_app.m_Renderer); ++i)
         {
             const rive::PathDrawEvent evt = rive::getDrawEvent(g_app.m_Renderer, i);
             switch(evt.m_Type)
@@ -1093,7 +1093,7 @@ struct AppSTCRenderer
     static void Frame(uint32_t width, uint32_t height)
     {
         AppSTCRenderer obj(width, height);
-        for (size_t i = 0; i < rive::getDrawEventCount(g_app.m_Renderer); ++i)
+        for (int i = 0; i < (int) rive::getDrawEventCount(g_app.m_Renderer); ++i)
         {
             const rive::PathDrawEvent evt = rive::getDrawEvent(g_app.m_Renderer, i);
             switch(evt.m_Type)

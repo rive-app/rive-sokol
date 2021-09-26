@@ -12,6 +12,10 @@
 
 namespace rive
 {
+    ////////////////////////////////////////////////////////
+    // Misc / Utility functions
+    ////////////////////////////////////////////////////////
+
     static void getColorArrayFromUint(unsigned int colorIn, float* rgbaOut)
     {
         rgbaOut[0] = (float)((0x00ff0000 & colorIn) >> 16) / 255.0f;
@@ -19,6 +23,10 @@ namespace rive
         rgbaOut[2] = (float)((0x000000ff & colorIn) >> 0)  / 255.0f;
         rgbaOut[3] = (float)((0xff000000 & colorIn) >> 24) / 255.0f;
     }
+
+    ////////////////////////////////////////////////////////
+    // SharedRenderPaint
+    ////////////////////////////////////////////////////////
 
     SharedRenderPaint::SharedRenderPaint(Context* ctx)
     : m_Context(ctx)
@@ -42,6 +50,26 @@ namespace rive
         {
             m_Context->m_DestroyBufferCb(m_StrokeBuffer, m_Context->m_BufferCbUserData);
         }
+    }
+
+    void SharedRenderPaint::thickness(float value)
+    {
+        m_StrokeThickness = value;
+    }
+    
+    void SharedRenderPaint::join(StrokeJoin value)
+    {
+        m_StrokeJoin = value;
+    }
+    
+    void SharedRenderPaint::cap(StrokeCap value)
+    {
+        m_StrokeCap = value;
+    }
+
+    void SharedRenderPaint::blendMode(BlendMode value)
+    {
+        // NOP
     }
 
     void SharedRenderPaint::style(RenderPaintStyle value)
@@ -101,52 +129,6 @@ namespace rive
             m_Stroke->resetRenderOffset();
             path->renderStroke(renderer, this, transform);
         }
-        else
-        {
-            // NO GO
-            // p->cover(this, m_Transform, Mat2D(), m_IsClipping);
-        }
-
-        /*
-        if (m_Stroke != nullptr)
-        {
-            if (m_StrokeDirty)
-            {
-                static Mat2D identity;
-                m_Stroke->reset();
-                path->extrudeStroke(m_Stroke,
-                                    m_StrokeJoin,
-                                    m_StrokeCap,
-                                    m_StrokeThickness / 2.0f,
-                                    identity);
-                m_StrokeDirty = false;
-            }
-
-            const std::vector<Vec2D>& strip = m_Stroke->triangleStrip();
-            auto size = strip.size();
-            if (size == 0)
-            {
-                return;
-            }
-
-            glBindBuffer(GL_ARRAY_BUFFER, m_StrokeBuffer);
-            glBufferData(GL_ARRAY_BUFFER,
-                         size * 2 * sizeof(float),
-                         &strip[0][0],
-                         GL_DYNAMIC_DRAW);
-
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * 4, (void*)0);
-
-            m_Stroke->resetRenderOffset();
-            path->renderStroke(m_Stroke, renderer, transform);
-        }
-        else
-        {
-            path->cover(renderer, transform);
-        }
-        */
-
     }
 
     void SharedRenderPaint::color(unsigned int value)
@@ -229,7 +211,9 @@ namespace rive
         return m_IsVisible;
     }
 
-    /* Shared render path */
+    ////////////////////////////////////////////////////////
+    // Shared render path
+    ////////////////////////////////////////////////////////
     SharedRenderPath::SharedRenderPath(Context* ctx)
     : m_Context(ctx)
     {}
@@ -260,59 +244,12 @@ namespace rive
         };
 
         renderer->pushDrawEvent(evt);
-
-        /*
-
-        {
-            float m4[16] = {transform[0],
-                            transform[1],
-                            0.0,
-                            0.0,
-                            transform[2],
-                            transform[3],
-                            0.0,
-                            0.0,
-                            0.0,
-                            0.0,
-                            1.0,
-                            0.0,
-                            transform[4],
-                            transform[5],
-                            0.0,
-                            1.0};
-
-            glUniformMatrix4fv(renderer->transformUniformIndex(), 1, GL_FALSE, m4);
-        }
-        {
-            float m4[16] = {localTransform[0],
-                            localTransform[1],
-                            0.0,
-                            0.0,
-                            localTransform[2],
-                            localTransform[3],
-                            0.0,
-                            0.0,
-                            0.0,
-                            0.0,
-                            1.0,
-                            0.0,
-                            localTransform[4],
-                            localTransform[5],
-                            0.0,
-                            1.0};
-
-            glUniformMatrix4fv(
-                renderer->shapeTransformUniformIndex(), 1, GL_FALSE, m4);
-        }
-
-        std::size_t start, end;
-        stroke->nextRenderOffset(start, end);
-
-        glDrawArrays(GL_TRIANGLE_STRIP, start, end - start);
-        */
     }
 
-    /* Shared Renderer */
+    ////////////////////////////////////////////////////////
+    // Shared Renderer
+    ////////////////////////////////////////////////////////
+
     SharedRenderer::SharedRenderer()
     : m_IndexBuffer(0)
     {
@@ -425,7 +362,10 @@ namespace rive
         }
     }
 
-    /* Misc functions */
+    ////////////////////////////////////////////////////////
+    // API Functions
+    ////////////////////////////////////////////////////////
+
     float getContourError(HRenderer renderer)
     {
         SharedRenderer* r = (SharedRenderer*) renderer;

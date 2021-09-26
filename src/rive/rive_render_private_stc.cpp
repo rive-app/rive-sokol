@@ -10,10 +10,13 @@
 
 namespace rive
 {
+    ////////////////////////////////////////////////////////
+    // Stencil To Cover - RenderPaint
+    ////////////////////////////////////////////////////////
+
     StencilToCoverRenderPaint::StencilToCoverRenderPaint(Context* ctx)
     : SharedRenderPaint(ctx)
-    {
-    }
+    {}
 
     void StencilToCoverRenderPaint::drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path)
     {
@@ -26,6 +29,10 @@ namespace rive
         }
     }
 
+
+    ////////////////////////////////////////////////////////
+    // Stencil To Cover - Renderer
+    ////////////////////////////////////////////////////////
 
     StencilToCoverRenderer::StencilToCoverRenderer(Context* ctx)
     {
@@ -54,7 +61,7 @@ namespace rive
         bool same = true;
         if (m_ClipPaths.Size() == m_AppliedClips.Size())
         {
-            for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
+            for (int i = 0; i < (int) m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pdA = m_ClipPaths[i];
                 const PathDescriptor& pdB = m_AppliedClips[i];
@@ -83,7 +90,7 @@ namespace rive
 
         if (m_ClipPaths.Size() > 0)
         {
-            for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
+            for (int i = 0; i < (int) m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pd = m_ClipPaths[i];
                 applyClipPath((StencilToCoverRenderPath*) pd.m_Path, pd.m_Transform);
@@ -92,7 +99,7 @@ namespace rive
             m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
             m_AppliedClips.SetSize(0);
 
-            for (int i = 0; i < m_ClipPaths.Size(); ++i)
+            for (int i = 0; i < (int) m_ClipPaths.Size(); ++i)
             {
                 m_AppliedClips.Push(m_ClipPaths[i]);
             }
@@ -145,14 +152,14 @@ namespace rive
         }
 
         setPaint(rp);
-        bool isEvenOdd = p->fillRule() == FillRule::evenOdd;
-        p->stencil(this, m_Transform, 0, isEvenOdd, m_IsClipping);
-        //p->cover(this, m_Transform, Mat2D(), m_IsClipping);
-
+        p->stencil(this, m_Transform, 0, p->fillRule() == FillRule::evenOdd, m_IsClipping);
         rp->drawPaint(this, m_Transform, srph);
     }
 
-    /* StencilToCoverRenderPath impl */
+    ////////////////////////////////////////////////////////
+    // Stencil To Cover - RenderPath
+    ////////////////////////////////////////////////////////
+
     StencilToCoverRenderPath::StencilToCoverRenderPath(Context* ctx)
     : SharedRenderPath(ctx)
     , m_VertexBuffer(0)
@@ -180,7 +187,7 @@ namespace rive
     {
         if (isContainer())
         {
-            for (int i = 0; i < m_SubPaths.size(); ++i)
+            for (int i = 0; i < (int) m_SubPaths.size(); ++i)
             {
                 Mat2D stcPathTransform;
                 Mat2D::multiply(stcPathTransform, transform, m_SubPaths[i].transform());
@@ -212,7 +219,7 @@ namespace rive
     {
         if (isContainer())
         {
-            for (int i = 0; i < m_SubPaths.size(); ++i)
+            for (int i = 0; i < (int) m_SubPaths.size(); ++i)
             {
                 Mat2D stcWorldTransform;
                 Mat2D::multiply(stcWorldTransform, transform, m_SubPaths[i].transform());

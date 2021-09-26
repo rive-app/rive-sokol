@@ -15,7 +15,10 @@
 
 namespace rive
 {
-	/* TessellationRenderPath Impl */
+    ////////////////////////////////////////////////////////
+    // Tessellation - RenderPath
+    ////////////////////////////////////////////////////////
+
     TessellationRenderPath::TessellationRenderPath(Context* ctx)
     : SharedRenderPath(ctx)
     , m_VertexBuffer(0)
@@ -37,7 +40,7 @@ namespace rive
     {
         if (isContainer())
         {
-            for (int i = 0; i < m_SubPaths.size(); ++i)
+            for (int i = 0; i < (int) m_SubPaths.size(); ++i)
             {
                 TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_SubPaths[i].path();
                 sharedPath->addContours(tess, m_SubPaths[i].transform());
@@ -83,7 +86,7 @@ namespace rive
     {
         if (isContainer())
         {
-            for (int i = 0; i < m_SubPaths.size(); ++i)
+            for (int i = 0; i < (int) m_SubPaths.size(); ++i)
             {
                 TessellationRenderPath* sharedPath = (TessellationRenderPath*) m_SubPaths[i].path();
                 sharedPath->updateContour();
@@ -133,8 +136,11 @@ namespace rive
     {
         updateTesselation();
     }
+    
+    ////////////////////////////////////////////////////////
+    // Tessellation - Renderer
+    ////////////////////////////////////////////////////////
 
-    /* Renderer impl */
     TessellationRenderer::TessellationRenderer(Context* ctx)
     {
         m_Context = ctx;
@@ -145,7 +151,7 @@ namespace rive
         bool same = true;
         if (m_ClipPaths.Size() == m_AppliedClips.Size())
         {
-            for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
+            for (int i = 0; i < (int) m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pdA = m_ClipPaths[i];
                 const PathDescriptor& pdB = m_AppliedClips[i];
@@ -172,7 +178,7 @@ namespace rive
             PathDrawEvent evtClippingBegin = { .m_Type = EVENT_CLIPPING_BEGIN };
             pushDrawEvent(evtClippingBegin);
 
-            for (int i = 0; i < (int)m_ClipPaths.Size(); ++i)
+            for (int i = 0; i < (int) m_ClipPaths.Size(); ++i)
             {
                 const PathDescriptor& pd = m_ClipPaths[i];
 
@@ -196,7 +202,7 @@ namespace rive
             m_AppliedClips.SetCapacity(m_ClipPaths.Capacity());
             m_AppliedClips.SetSize(0);
 
-            for (int i = 0; i < m_ClipPaths.Size(); ++i)
+            for (int i = 0; i < (int) m_ClipPaths.Size(); ++i)
             {
                 m_AppliedClips.Push(m_ClipPaths[i]);
             }
