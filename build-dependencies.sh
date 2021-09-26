@@ -61,9 +61,9 @@ dep_rive()
         echo "Building rive."
         pushd . &>/dev/null
         cd rive-cpp
-        #git checkout .
-        #git checkout low_level_rendering
-        # git apply --ignore-space-change ../../../third-party/rive-cpp.patch
+        git checkout .
+        git checkout low_level_rendering
+        git apply --ignore-space-change ../../../third-party/rive-cpp.patch
 
         cd build
         premake5 gmake2 --with-low-level-rendering

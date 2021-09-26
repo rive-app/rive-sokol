@@ -893,8 +893,7 @@ struct AppTessellationRenderer
                     else obj.DrawPass(evt);
                     break;
                 case rive::EVENT_DRAW_STROKE:
-                    // TODO
-                    // obj.StrokePass(evt);
+                    obj.DrawStroke(evt);
                     break;
                 case rive::EVENT_CLIPPING_BEGIN:
                     obj.BeginClipping(evt);
@@ -1045,6 +1044,11 @@ struct AppTessellationRenderer
         }
 
         sg_draw(0, drawLength, 1);
+    }
+
+    void DrawStroke(const rive::PathDrawEvent& evt)
+    {
+        // TODO: implement
     }
 
     void HandleDebugViews(const rive::PathDrawEvent& evt)
