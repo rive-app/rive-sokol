@@ -3,6 +3,8 @@
 
 namespace rive
 {
+    // TODO: We get compiler warnings when copying this in the arrays, fix it?
+    //       -> moving an object of non-trivially copyable type 'struct rive::PathDescriptor' 
     struct PathDescriptor
     {
         RenderPath* m_Path;
@@ -47,7 +49,7 @@ namespace rive
     class SharedRenderPaint : public RenderPaint
     {
     public:
-        SharedRenderPaint();
+        SharedRenderPaint(Context* ctx);
         ~SharedRenderPaint();
         void color(unsigned int value)                              override;
         void style(RenderPaintStyle value)                          override;
@@ -60,11 +62,12 @@ namespace rive
         void addStop(unsigned int color, float stop)                override;
         void completeGradient()                                     override;
         void invalidateStroke()                                     override;
+        bool isVisible();
         inline RenderPaintStyle getStyle()  { return m_Style; }
-        inline bool             isVisible() { return m_IsVisible; }
 
-        void drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path);
-
+        void virtual drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path);
+        
+        Context*                  m_Context;
         SharedRenderPaintBuilder* m_Builder;
         ContourStroke*            m_Stroke;
         HBuffer                   m_StrokeBuffer;
@@ -82,7 +85,7 @@ namespace rive
     public:
         Context* m_Context;
         SharedRenderPath(Context* ctx);
-        void renderStroke(SharedRenderer* renderer, ContourStroke* stroke,
+        void renderStroke(SharedRenderer* renderer, SharedRenderPaint* paint,
             const Mat2D& transform, const Mat2D& localTransform = Mat2D::identity());
     };
 
@@ -128,6 +131,13 @@ namespace rive
     // Stencil To Cover
     ////////////////////////////////////////////////////
     class StencilToCoverRenderPath;
+    class StencilToCoverRenderPaint : public SharedRenderPaint
+    {
+    public:
+        StencilToCoverRenderPaint(Context* ctx);
+        void drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path);
+    };
+
     class StencilToCoverRenderer : public SharedRenderer
     {
     public:

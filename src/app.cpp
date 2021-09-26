@@ -581,8 +581,9 @@ bool AppBootstrap(int argc, char const *argv[])
     g_app.m_StencilPipelineCoverIsApplyingCLipping = coverPipelineIsApplyingClipping;
 
     // Stroke pipeline
-    sg_pipeline_desc strokePipeline = {};
-    strokePipeline.shader = tessellationPipeline.shader;
+    sg_pipeline_desc strokePipeline               = {};
+    strokePipeline.shader                         = tessellationPipeline.shader;
+    strokePipeline.primitive_type                 = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
     strokePipeline.index_type                     = SG_INDEXTYPE_NONE;
     strokePipeline.layout.attrs[0]                = { .format = SG_VERTEXFORMAT_FLOAT2 };
     strokePipeline.colors[0].blend.enabled        = true;
@@ -1293,7 +1294,7 @@ struct AppSTCRenderer
 
     void DrawStroke(const rive::PathDrawEvent& evt)
     {
-        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, evt.m_Path);
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, m_Paint);
         App::GpuBuffer* strokebuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
         if (!IS_BUFFER_VALID(strokebuffer))
         {
@@ -1302,14 +1303,24 @@ struct AppSTCRenderer
 
         sg_bindings& bindings      = g_app.m_Bindings;
         bindings.vertex_buffers[0] = strokebuffer->m_Handle;
-        bindings.index_buffer      = {0}; // coverIndexBuffer->m_Handle;
+        bindings.index_buffer      = {};
 
         rive::Mat2D transformWorld  = evt.m_TransformWorld;
+        rive::Mat2D transformLocal  = evt.m_TransformLocal;
         Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+        Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
+
+        if (!m_IsApplyingClipping && m_PaintDirty)
+        {
+            FillPaintData(m_Paint, m_FsUniforms);
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
+            m_PaintDirty = false;
+        }
 
         sg_apply_pipeline(g_app.m_StrokePipeline);
         sg_apply_bindings(&bindings);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+        sg_draw(evt.m_OffsetStart, evt.m_OffsetEnd - evt.m_OffsetStart, 1);
     }
 
     void HandleDebugViews(const rive::PathDrawEvent& evt)

@@ -10,6 +10,23 @@
 
 namespace rive
 {
+    StencilToCoverRenderPaint::StencilToCoverRenderPaint(Context* ctx)
+    : SharedRenderPaint(ctx)
+    {
+    }
+
+    void StencilToCoverRenderPaint::drawPaint(SharedRenderer* renderer, const Mat2D& transform, SharedRenderPath* path)
+    {
+        SharedRenderPaint::drawPaint(renderer, transform, path);
+
+        if (m_Stroke == 0)
+        {
+            StencilToCoverRenderPath* rp = (StencilToCoverRenderPath*) path;
+            rp->cover(renderer, renderer->m_Transform, Mat2D(), renderer->m_IsClipping);
+        }
+    }
+
+
     StencilToCoverRenderer::StencilToCoverRenderer(Context* ctx)
     {
         const float coverVertices[] = {
@@ -117,7 +134,7 @@ namespace rive
         SharedRenderPath*       srph = (SharedRenderPath*) path;
         SharedRenderPaint*       rp  = (SharedRenderPaint*) paint;
 
-        if (rp->getStyle() != RenderPaintStyle::fill || !rp->isVisible())
+        if (!rp->isVisible())
         {
             return;
         }
