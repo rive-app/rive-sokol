@@ -38,14 +38,8 @@ namespace rive
 
     SharedRenderPaint::~SharedRenderPaint()
     {
-        if (m_Builder != 0)
-        {
-            delete m_Builder;
-        }
-        if (m_Stroke != 0)
-        {
-            delete m_Builder;
-        }
+        delete m_Builder;
+        delete m_Stroke;
         if (m_StrokeBuffer)
         {
             m_Context->m_DestroyBufferCb(m_StrokeBuffer, m_Context->m_BufferCbUserData);
@@ -81,11 +75,7 @@ namespace rive
     void SharedRenderPaint::style(RenderPaintStyle value)
     {
         m_Style = value;
-
-        if (m_Stroke != 0)
-        {
-            delete m_Stroke;
-        }
+        delete m_Stroke;
 
         if (m_Style == RenderPaintStyle::stroke)
         {
