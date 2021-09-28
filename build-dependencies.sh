@@ -63,7 +63,7 @@ dep_rive()
         cd rive-cpp
         git checkout .
         git checkout low_level_rendering
-        # git apply --ignore-space-change ../../../third-party/rive-cpp.patch
+        git apply --ignore-space-change ../../../third-party/rive-cpp.patch
 
         cd build
         premake5 gmake2 --with-low-level-rendering

@@ -100,6 +100,7 @@ static struct App
     sg_pipeline                m_StencilPipelineCoverNonClipping;
     sg_pipeline                m_StencilPipelineCoverClipping;
     sg_pipeline                m_StencilPipelineCoverIsApplyingCLipping;
+    sg_pipeline                m_StrokePipeline;
     sg_pass_action             m_PassAction;
     sg_bindings                m_Bindings;
     sg_pipeline                m_DebugViewContourPipeline;
@@ -172,9 +173,9 @@ rive::Artboard* LoadArtboardFromData(uint8_t* data, size_t dataLength)
 
 static void UpdateArtboardCloneCount(App::ArtboardContext& ctx)
 {
-    if (ctx.m_CloneCount != ctx.m_Artboards.Size())
+    if (ctx.m_CloneCount != (int) ctx.m_Artboards.Size())
     {
-        if (ctx.m_CloneCount > ctx.m_Artboards.Size())
+        if (ctx.m_CloneCount > (int) ctx.m_Artboards.Size())
         {
             rive::Artboard* artboard = LoadArtboardFromData(ctx.m_Data, ctx.m_DataSize);
             App::ArtboardData data = {
@@ -192,7 +193,7 @@ static void UpdateArtboardCloneCount(App::ArtboardContext& ctx)
         }
         else
         {
-            for (int i = ctx.m_CloneCount; i < ctx.m_Artboards.Size(); ++i)
+            for (int i = ctx.m_CloneCount; i < (int) ctx.m_Artboards.Size(); ++i)
             {
                 if (ctx.m_Artboards[i].m_Artboard)
                 {
@@ -579,6 +580,16 @@ bool AppBootstrap(int argc, char const *argv[])
     g_app.m_StencilPipelineCoverClipping           = coverPipelineClipping;
     g_app.m_StencilPipelineCoverIsApplyingCLipping = coverPipelineIsApplyingClipping;
 
+    // Stroke pipeline
+    sg_pipeline_desc strokePipeline               = {};
+    strokePipeline.shader                         = tessellationPipeline.shader;
+    strokePipeline.primitive_type                 = SG_PRIMITIVETYPE_TRIANGLE_STRIP;
+    strokePipeline.index_type                     = SG_INDEXTYPE_NONE;
+    strokePipeline.layout.attrs[0]                = { .format = SG_VERTEXFORMAT_FLOAT2 };
+    strokePipeline.colors[0].blend.enabled        = true;
+    strokePipeline.colors[0].blend.src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA;
+    strokePipeline.colors[0].blend.dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+
     // Debug pipelines
     sg_pipeline_desc debugViewContourPipelineDesc               = {};
     debugViewContourPipelineDesc.shader                         = sg_make_shader(rive_debug_contour_shader_desc(sg_query_backend()));
@@ -594,6 +605,7 @@ bool AppBootstrap(int argc, char const *argv[])
     passAction.colors[0].value  = { 0.25f, 0.25f, 0.25f, 1.0f};
 
     g_app.m_MainShader                        = tessellationPipeline.shader;
+    g_app.m_StrokePipeline                    = sg_make_pipeline(&strokePipeline);
     g_app.m_TessellationPipeline              = sg_make_pipeline(&tessellationPipeline);
     g_app.m_TessellationApplyClippingPipeline = sg_make_pipeline(&tessellationApplyingClippingPipeline);
     g_app.m_DebugViewContourPipeline          = sg_make_pipeline(&debugViewContourPipelineDesc);
@@ -742,7 +754,7 @@ static void FillPaintData(rive::HRenderPaint paint, fs_paint_t& uniform)
     const rive::PaintData paintData = rive::getPaintData(paint);
 
     //  Note: Have to use vectors for the stops here aswell, doesn't work otherwise (sokol issue?)
-    for (int i = 0; i < paintData.m_StopCount; ++i)
+    for (int i = 0; i < (int) paintData.m_StopCount; ++i)
     {
         uniform.stops[i][0] = paintData.m_Stops[i];
     }
@@ -867,7 +879,7 @@ struct AppTessellationRenderer
     static void Frame(uint32_t width, uint32_t height)
     {
         AppTessellationRenderer obj(width, height);
-        for (int i = 0; i < rive::getDrawEventCount(g_app.m_Renderer); ++i)
+        for (int i = 0; i < (int) rive::getDrawEventCount(g_app.m_Renderer); ++i)
         {
             const rive::PathDrawEvent evt = rive::getDrawEvent(g_app.m_Renderer, i);
             switch(evt.m_Type)
@@ -879,6 +891,9 @@ struct AppTessellationRenderer
                     if (g_app.m_DebugView != App::DEBUG_VIEW_NONE)
                          obj.HandleDebugViews(evt);
                     else obj.DrawPass(evt);
+                    break;
+                case rive::EVENT_DRAW_STROKE:
+                    obj.DrawStroke(evt);
                     break;
                 case rive::EVENT_CLIPPING_BEGIN:
                     obj.BeginClipping(evt);
@@ -1031,6 +1046,36 @@ struct AppTessellationRenderer
         sg_draw(0, drawLength, 1);
     }
 
+    void DrawStroke(const rive::PathDrawEvent& evt)
+    {
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, m_Paint);
+        App::GpuBuffer* strokebuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        if (!IS_BUFFER_VALID(strokebuffer))
+        {
+            return;
+        }
+
+        sg_bindings& bindings      = g_app.m_Bindings;
+        bindings.vertex_buffers[0] = strokebuffer->m_Handle;
+        bindings.index_buffer      = {};
+
+        rive::Mat2D transformWorld  = evt.m_TransformWorld;
+        rive::Mat2D transformLocal  = evt.m_TransformLocal;
+        Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+        Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
+
+        sg_apply_pipeline(g_app.m_StrokePipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+        if (!m_IsApplyingClipping && m_PaintDirty)
+        {
+            FillPaintData(m_Paint, m_FsUniforms);
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
+            m_PaintDirty = false;
+        }
+        sg_draw(evt.m_OffsetStart, evt.m_OffsetEnd - evt.m_OffsetStart, 1);
+    }
+
     void HandleDebugViews(const rive::PathDrawEvent& evt)
     {
         assert(g_app.m_DebugView == App::DEBUG_VIEW_CONTOUR);
@@ -1073,7 +1118,7 @@ struct AppSTCRenderer
     static void Frame(uint32_t width, uint32_t height)
     {
         AppSTCRenderer obj(width, height);
-        for (int i = 0; i < rive::getDrawEventCount(g_app.m_Renderer); ++i)
+        for (int i = 0; i < (int) rive::getDrawEventCount(g_app.m_Renderer); ++i)
         {
             const rive::PathDrawEvent evt = rive::getDrawEvent(g_app.m_Renderer, i);
             switch(evt.m_Type)
@@ -1089,6 +1134,9 @@ struct AppSTCRenderer
                 case rive::EVENT_DRAW_COVER:
                     if (g_app.m_DebugView == App::DEBUG_VIEW_NONE)
                         obj.CoverPass(evt);
+                    break;
+                case rive::EVENT_DRAW_STROKE:
+                    obj.DrawStroke(evt);
                     break;
                 case rive::EVENT_CLIPPING_BEGIN:
                     obj.BeginClipping(evt);
@@ -1271,6 +1319,36 @@ struct AppSTCRenderer
         {
             mat4x4_dup((float (*)[4]) m_VsUniforms.projection, m_CameraMtx);
         }
+    }
+
+    void DrawStroke(const rive::PathDrawEvent& evt)
+    {
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, m_Paint);
+        App::GpuBuffer* strokebuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        if (!IS_BUFFER_VALID(strokebuffer))
+        {
+            return;
+        }
+
+        sg_bindings& bindings      = g_app.m_Bindings;
+        bindings.vertex_buffers[0] = strokebuffer->m_Handle;
+        bindings.index_buffer      = {};
+
+        rive::Mat2D transformWorld  = evt.m_TransformWorld;
+        rive::Mat2D transformLocal  = evt.m_TransformLocal;
+        Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+        Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
+
+        sg_apply_pipeline(g_app.m_StrokePipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+        if (!m_IsApplyingClipping && m_PaintDirty)
+        {
+            FillPaintData(m_Paint, m_FsUniforms);
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
+            m_PaintDirty = false;
+        }
+        sg_draw(evt.m_OffsetStart, evt.m_OffsetEnd - evt.m_OffsetStart, 1);
     }
 
     void HandleDebugViews(const rive::PathDrawEvent& evt)

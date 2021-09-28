@@ -38,10 +38,11 @@ namespace rive
         EVENT_DRAW             = 1,
         EVENT_DRAW_STENCIL     = 2,
         EVENT_DRAW_COVER       = 3,
-        EVENT_SET_PAINT        = 4,
-        EVENT_CLIPPING_BEGIN   = 5,
-        EVENT_CLIPPING_END     = 6,
-        EVENT_CLIPPING_DISABLE = 7,
+        EVENT_DRAW_STROKE      = 4,
+        EVENT_SET_PAINT        = 5,
+        EVENT_CLIPPING_BEGIN   = 6,
+        EVENT_CLIPPING_END     = 7,
+        EVENT_CLIPPING_DISABLE = 8,
     };
 
     struct PathDrawEvent
@@ -51,6 +52,8 @@ namespace rive
         HRenderPaint      m_Paint;
         Mat2D             m_TransformWorld;
         Mat2D             m_TransformLocal;
+        uint32_t          m_OffsetStart;
+        uint32_t          m_OffsetEnd;
         uint32_t          m_Idx              : 22;
         uint32_t          m_AppliedClipCount : 8;
         uint32_t          m_IsEvenOdd        : 1;
@@ -92,6 +95,7 @@ namespace rive
     float               getContourError(HRenderer renderer);
     uint32_t            getDrawEventCount(HRenderer renderer);
     const DrawBuffers   getDrawBuffers(HContext ctx, HRenderer renderer, HRenderPath path);
+    const DrawBuffers   getDrawBuffers(HContext ctx, HRenderer renderer, HRenderPaint paint);
     const PathDrawEvent getDrawEvent(HRenderer renderer, uint32_t i);
     const PaintData     getPaintData(HRenderPaint paint);
 }
