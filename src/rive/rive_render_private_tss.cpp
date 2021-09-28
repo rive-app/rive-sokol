@@ -217,9 +217,10 @@ namespace rive
     void TessellationRenderer::drawPath(RenderPath* path, RenderPaint* paint)
     {
         TessellationRenderPath*  p = (TessellationRenderPath*) path;
+        SharedRenderPath*     srph = (SharedRenderPath*) path;
         SharedRenderPaint*      rp = (SharedRenderPaint*) paint;
 
-        if (rp->getStyle() != RenderPaintStyle::fill || !rp->isVisible())
+        if (!rp->isVisible())
         {
             return;
         }
@@ -231,13 +232,19 @@ namespace rive
 
         setPaint(rp);
 
-        PathDrawEvent evt = {
-            .m_Type           = EVENT_DRAW,
-            .m_Path           = path,
-            .m_TransformWorld = m_Transform
-        };
-        pushDrawEvent(evt);
-
-        p->drawMesh(this, m_Transform);
+        if (rp->getStyle() != RenderPaintStyle::stroke)
+        {
+            PathDrawEvent evt = {
+                .m_Type           = EVENT_DRAW,
+                .m_Path           = path,
+                .m_TransformWorld = m_Transform
+            };
+            pushDrawEvent(evt);
+            p->drawMesh(this, m_Transform);
+        }
+        else
+        {
+            rp->drawPaint(this, m_Transform, srph);
+        }
     }
 }

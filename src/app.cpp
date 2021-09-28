@@ -1048,7 +1048,32 @@ struct AppTessellationRenderer
 
     void DrawStroke(const rive::PathDrawEvent& evt)
     {
-        // TODO: implement
+        const rive::DrawBuffers buffers = rive::getDrawBuffers(g_app.m_Ctx, g_app.m_Renderer, m_Paint);
+        App::GpuBuffer* strokebuffer    = (App::GpuBuffer*) buffers.m_VertexBuffer;
+        if (!IS_BUFFER_VALID(strokebuffer))
+        {
+            return;
+        }
+
+        sg_bindings& bindings      = g_app.m_Bindings;
+        bindings.vertex_buffers[0] = strokebuffer->m_Handle;
+        bindings.index_buffer      = {};
+
+        rive::Mat2D transformWorld  = evt.m_TransformWorld;
+        rive::Mat2D transformLocal  = evt.m_TransformLocal;
+        Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
+        Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
+
+        sg_apply_pipeline(g_app.m_StrokePipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
+        if (!m_IsApplyingClipping && m_PaintDirty)
+        {
+            FillPaintData(m_Paint, m_FsUniforms);
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
+            m_PaintDirty = false;
+        }
+        sg_draw(evt.m_OffsetStart, evt.m_OffsetEnd - evt.m_OffsetStart, 1);
     }
 
     void HandleDebugViews(const rive::PathDrawEvent& evt)
@@ -1314,16 +1339,15 @@ struct AppSTCRenderer
         Mat2DToMat4(transformWorld, (float (*)[4]) m_VsUniforms.transform);
         Mat2DToMat4(transformLocal, (float (*)[4]) m_VsUniforms.transformLocal);
 
+        sg_apply_pipeline(g_app.m_StrokePipeline);
+        sg_apply_bindings(&bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
         if (!m_IsApplyingClipping && m_PaintDirty)
         {
             FillPaintData(m_Paint, m_FsUniforms);
             sg_apply_uniforms(SG_SHADERSTAGE_FS, SLOT_fs_paint, &m_FsUniformsRange);
             m_PaintDirty = false;
         }
-
-        sg_apply_pipeline(g_app.m_StrokePipeline);
-        sg_apply_bindings(&bindings);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &m_VsUniformsRange);
         sg_draw(evt.m_OffsetStart, evt.m_OffsetEnd - evt.m_OffsetStart, 1);
     }
 

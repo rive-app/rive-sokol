@@ -10,8 +10,8 @@ platform_setup()
     if [ "$BUILD_PLATFORM" = ${PLATFORM_OSX} ]; then
         export PLATFORM_LIBS="-framework Cocoa -framework IOKit -framework CoreVideo -framework OpenGL"
     elif [ "$BUILD_PLATFORM" = ${PLATFORM_WINDOWS} ]; then
-        export PLATFORM_LIBS="-lwinpthread -lglfw3 -lgdi32 -lopengl32 -lImm32"
-        export PLATFORM_LDFLAGS="-static-libgcc -static-libstdc++"
+        export PLATFORM_LIBS="-lglfw3 -lgdi32 -lopengl32 -lImm32"
+        export PLATFORM_LDFLAGS="-static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive" # TODO: Maybe not link pthread statically, exe is huge!
     fi
 }
 

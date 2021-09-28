@@ -200,6 +200,7 @@ namespace rive
         m_Builder->m_Stops.SetSize(0);
         m_Builder->m_Stops.SetCapacity(0);
         delete m_Builder;
+        m_Builder = 0;
     }
 
     bool SharedRenderPaint::isVisible()
@@ -230,6 +231,8 @@ namespace rive
 
         size_t start, end;
         stroke->nextRenderOffset(start, end);
+
+        renderer->setPaint(renderPaint);
 
         PathDrawEvent evt = {
             .m_Type           = EVENT_DRAW_STROKE,
@@ -519,13 +522,7 @@ namespace rive
     {
         Context* c               = (Context*) ctx;
         SharedRenderPaint* rp    = (SharedRenderPaint*) paint;
-
-        if (c->m_RenderMode == MODE_STENCIL_TO_COVER)
-        {
-            return { .m_VertexBuffer = rp->m_StrokeBuffer };
-        }
-
-        return {};
+        return { .m_VertexBuffer = rp->m_StrokeBuffer };
     }
 
     void destroyContext(HContext ctx)
